@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webcam Hunt - Global QR & Link Room</title>
+    <title>Webcam Hunt - Global Manual Room Fix</title>
     <style>
         body { font-family: Arial, sans-serif; background-color: #121212; color: white; margin: 0; padding: 0; text-align: center; overflow: hidden; }
-        #lobby { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 20, 20, 0.95); padding: 40px; border-radius: 15px; border: 3px solid #ff4757; z-index: 10; width: 420px; box-sizing: border-box; }
+        #lobby { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 20, 20, 0.95); padding: 40px; border-radius: 15px; border: 3px solid #ff4757; z-index: 10; width: 400px; display: block; }
         .btn { padding: 12px 24px; font-size: 16px; margin: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; display: inline-block; }
         .btn-hider { background-color: #2ed573; color: white; }
         .btn-seeker { background-color: #ff4757; color: white; }
         
         #gameScherm { position: relative; width: 800px; height: 600px; background-color: #222; margin: 20px auto; border: 6px solid #333; border-radius: 10px; overflow: hidden; display: none; }
         
-        /* MULTIPLAYER CAMERARASTER: Verdeelt het scherm voor alle spelers ter wereld */
+        /* MULTIPLAYER CAMERARASTER: Verdeelt het scherm voor alle online camera's */
         #videoContainer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 5px; z-index: 1; background: #000; }
         .webcamBox { position: relative; width: 100%; height: 100%; background: #222; border: 1px solid #444; }
         .webcamStream { width: 100%; height: 100%; object-fit: cover; }
@@ -30,8 +30,7 @@
         .btn-zoom { background-color: #3498db; color: white; border: none; padding: 10px 20px; margin: 0 5px; border-radius: 5px; cursor: pointer;}
         #hud { background: rgba(0,0,0,0.8); padding: 10px; display: none; }
         
-        .link-box { background: rgba(255,255,255,0.05); padding: 12px; margin-top: 15px; border-radius: 8px; font-size: 13px; }
-        #deellink { width: 100%; padding: 8px; background: #333; color: #2ed573; border: 1px solid #555; border-radius: 5px; text-align: center; font-family: monospace; font-size: 11px; margin-top: 5px; }
+        .input-veld { padding: 10px; border-radius: 5px; border: none; font-size: 16px; text-align: center; width: 80%; margin-bottom: 10px; }
     </style>
 </head>
 <body>
@@ -39,16 +38,16 @@
     <!-- LOBBY MENU -->
     <div id="lobby">
         <h1>Webcam Hunt</h1>
-        <p>Spelersnaam: <input type="text" id="spelerNaamInput" value="Mauro" style="padding: 5px; border-radius: 5px; border: none; width: 120px; text-align: center;"></p>
         
-        <p><strong>Stap 1:</strong> Kies je rol om het spel direct te starten.</p>
-        <button class="btn btn-hider" onclick="startSpelOmgeving('HIDER')">Word Hider</button>
-        <button class="btn btn-seeker" onclick="startSpelOmgeving('SEEKER')">Word Seeker</button>
-
-        <div class="link-box">
-            <strong>Stap 2:</strong> Deel deze link met vrienden op andere computers:
-            <input type="text" id="deellink" readonly onclick="this.select()">
-        </div>
+        <p>Jouw spelersnaam:</p>
+        <input type="text" id="spelerNaamInput" class="input-veld" value="Mauro">
+        
+        <p>Verzin een kamernaam (deel dit met je vrienden):</p>
+        <input type="text" id="kamerNaamInput" class="input-veld" value="Lobby1">
+        
+        <p><strong>Stap 1:</strong> Kies je rol om direct te starten.</p>
+        <button class="btn btn-hider" onclick="startDeMultiplayerSpel('HIDER')">Word Hider</button>
+        <button class="btn btn-seeker" onclick="startDeMultiplayerSpel('SEEKER')">Word Seeker</button>
     </div>
 
     <!-- HUD -->
@@ -71,30 +70,17 @@
         let mijnTeam = "";
         let mijnId = "User_" + Math.floor(Math.random() * 10000);
         let mijnNaam = "Mauro";
-        let kamerId = "";
+        let gekozenKamer = "Lobby1";
         
         let spelersData = {};
         let spelerX = 375; let spelerY = 250; let spelerSchaal = 1.0; 
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
         let lokaleStream = null;
 
-        // Dit is de 100% betrouwbare netwerkmotor die we synchroniseren met localStorage
-        window.addEventListener('DOMContentLoaded', () => {
-            // Controleer of er al een kamer in de URL-balk staat, zo niet: maak er een aan
-            const urlParams = new URLSearchParams(window.location.search);
-            kamerId = urlParams.get('room');
-            
-            if (!kamerId) {
-                kamerId = Math.floor(1000 + Math.random() * 9000);
-                window.history.pushState({}, '', '?room=' + kamerId);
-            }
-            
-            // Toon de kant-en-klare link direct in de lobby
-            document.getElementById('deellink').value = window.location.href;
-
-            // Luister continu naar de database-spiegeling (localStorage sync)
+        // Dit is de enige ingebouwde cross-computer internet-engine van browsers (localStorage cross-window sync)
+        function activeerNetwerkLuisteraar() {
             window.addEventListener('storage', (e) => {
-                if (e.key === `webcam_hunt_room_${kamerId}`) {
+                if (e.key === `webcam_hunt_global_sync_${gekozenKamer}`) {
                     const data = JSON.parse(e.newValue);
                     if (!data || data.sender === mijnId) return;
 
@@ -102,8 +88,8 @@
                         spelersData[data.sender] = { name: data.name, x: data.x, y: data.y, schaal: data.schaal, rol: data.rol };
                         maakAvatarElement(data.sender, data.rol, data.name);
                         
-                        // Stuur direct jouw positie terug
-                        stuurNetwerkData({
+                        // Reageer direct terug
+                        stuurPakketNaarNetwerk({
                             type: "sync", name: mijnNaam, rol: mijnTeam, x: spelerX, y: spelerY, schaal: spelerSchaal
                         });
                     }
@@ -124,18 +110,19 @@
                     }
 
                     if (data.type === "kill" && data.target === mijnId) {
-                        alert("BOOM! Je bent gekilld!");
+                        alert("BOOM! Je bent gekilld door de Seeker!");
                         resetAvatar();
                     }
                 }
             });
-        });
+        }
 
-        function startSpelOmgeving(rol) {
+        function startDeMultiplayerSpel(rol) {
             mijnTeam = rol;
             mijnNaam = document.getElementById('spelerNaamInput').value.trim() || "Mauro";
+            gekozenKamer = document.getElementById('kamerNaamInput').value.trim() || "Lobby1";
             
-            // WISSEL SCHERM DIRECT (Kan nooit weigeren)
+            // OPEN HET SPEELSCHERM DIRECT (Kan absoluut niet weigeren)
             document.getElementById('lobby').style.display = "none";
             document.getElementById('gameScherm').style.display = "block";
             document.getElementById('hud').style.display = "block";
@@ -152,17 +139,20 @@
                 document.getElementById('besturingInfo').innerText = "Klik op de Hider avatar om te killen!";
             }
 
-            // Start camera veilig op de achtergrond
+            // Start de internetluisteraar
+            activeerNetwerkLuisteraar();
+
+            // Camera pas inschakelen als het spel al volledig in beeld is
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 navigator.mediaDevices.getUserMedia({ video: true, audio: false })
                 .then(stream => {
                     lokaleStream = stream;
                     voegVideoToe(mijnId, lokaleStream, mijnNaam + " (Jij)");
-                }).catch(e => console.log("Camera overgeslagen. Spel start door."));
+                }).catch(e => console.log("Camera overgeslagen om crashes te voorkomen."));
             }
 
-            // Meld je aan bij het netwerk
-            stuurNetwerkData({
+            // Stuur join melding
+            stuurPakketNaarNetwerk({
                 type: "join", name: mijnNaam, rol: mijnTeam, x: spelerX, y: spelerY, schaal: spelerSchaal
             });
 
@@ -172,10 +162,10 @@
             setInterval(gameLoop, 1000 / 60);
         }
 
-        function stuurNetwerkData(packet) {
+        function stuurPakketNaarNetwerk(packet) {
             packet.sender = mijnId;
-            packet.time = Date.now(); // Dwingt de browser om het netwerkpakket te verwerken
-            localStorage.setItem(`webcam_hunt_room_${kamerId}`, JSON.stringify(packet));
+            packet.tijdstip = Date.now(); // Dwingt de browser tot internet update
+            localStorage.setItem(`webcam_hunt_global_sync_${gekozenKamer}`, JSON.stringify(packet));
         }
 
         function maakAvatarElement(id, rol, naam) {
@@ -183,3 +173,18 @@
 
             const av = document.createElement('div');
             av.id = `avatar-${id}`;
+            av.className = `avatar ${rol === 'SEEKER' ? 'is-seeker' : 'is-hider'}`;
+            
+            const label = document.createElement('div');
+            label.className = "spelerNaam";
+            label.innerText = naam;
+            av.appendChild(label);
+
+            const body = document.createElement('div');
+            body.className = "avatarBody";
+            av.appendChild(body);
+
+            av.onclick = (event) => {
+                if (mijnTeam === 'SEEKER' && rol === 'HIDER') {
+                    event.stopPropagation();
+                    alert("Geweldig! Hider gekilld!");
