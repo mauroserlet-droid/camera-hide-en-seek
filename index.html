@@ -4,37 +4,80 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Webcam Hunt - GitHub Fixed</title>
-    
-    <!-- PeerJS bibliotheek voor multiplayer verbinding -->
+    <!-- PeerJS bibliotheek voor de multiplayer verbinding -->
     <script src="https://cloudflare.com"></script>
-    
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #121212; color: white; margin: 0; padding: 0; text-align: center; overflow: hidden; }
+        #lobby { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 20, 20, 0.95); padding: 40px; border-radius: 15px; border: 3px solid #ff4757; z-index: 10; }
+        .btn { padding: 12px 24px; font-size: 16px; margin: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .btn-hider { background-color: #2ed573; color: white; }
+        .btn-seeker { background-color: #ff4757; color: white; }
+        input { padding: 10px; font-size: 16px; border-radius: 5px; border: 1px solid #444; background: #222; color: white; text-align: center; margin: 10px 0; }
+        #gameScherm { position: relative; width: 800px; height: 600px; background-color: #222; margin: 20px auto; border: 6px solid #333; border-radius: 10px; overflow: hidden; display: none; }
+        #remoteVideo { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+        #avatarContainer { position: absolute; width: 50px; height: 80px; top: 250px; left: 375px; z-index: 5; cursor: pointer; transform-origin: bottom center; }
+        #avatarBody { width: 50px; height: 80px; background-color: #3498db; border-radius: 10px; position: relative; }
+        #avatarBody::before { content: ''; position: absolute; top: -25px; left: 10px; width: 30px; height: 30px; background-color: #ffdbac; border-radius: 50%; }
+        #zoomControls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 8; display: none; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 10px; }
+        .btn-zoom { background-color: #3498db; color: white; border: none; padding: 10px 20px; margin: 0 5px; border-radius: 5px; cursor: pointer;}
+        #hud { background: rgba(0,0,0,0.8); padding: 10px; display: none; }
+        .code-box { font-size: 24px; color: #2ed573; font-weight: bold; background: #000; padding: 5px; border-radius: 5px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+
+    <!-- LOBBY MENU -->
+    <div id="lobby">
+        <h1>Webcam Hunt: GitHub Edition</h1>
+        <p>Wil jij je verstoppen of gaan zoeken?</p>
+        
+        <div style="border-bottom: 1px solid #444; padding-bottom: 20px; margin-bottom: 20px;">
+            <button class="btn btn-hider" onclick="startAlsHider()">1. Word Hider</button>
+            <div id="hiderCodeSectie" style="display:none;">
+                <p>Geef deze code aan de Seeker:</p>
+                <div id="mijnKamerCode" class="code-box">Laden...</div>
+            </div>
+        </div>
+
+        <div>
+            <p>Ben jij de Seeker? Typ de code van de Hider in:</p>
+            <input type="text" id="kamercodeInput" placeholder="Code hier..."><br>
+            <button class="btn btn-seeker" onclick="startAlsSeeker()">2. Connect & Hunt</button>
+        </div>
+    </div>
+
+    <!-- HUD -->
+    <div id="hud">
+        <h2>Rol: <span id="teamWeergave">-</span></h2>
+        <p id="besturingInfo">Laden...</p>
+    </div>
+
+    <!-- SPEELVELD -->
+    <div id="gameScherm">
+        <video id="remoteVideo" autoplay playsinline muted></video>
+        <div id="avatarContainer" onclick="killAvatar(event)">
+            <div id="avatarBody"></div>
+        </div>
+    </div>
+
+    <div id="zoomControls">
+        <button class="btn-zoom" onclick="zoomIn()">Dichterbij (+)</button>
+        <button class="btn-zoom" onclick="zoomUit()">Verder Weg (-)</button>
+    </div>
+
     <script>
-        // We definiëren direct alle variabelen bovenin de HEAD zodat ze direct klaarstaan
-        let lobby, gameScherm, hud, teamWeergave, besturingInfo, avatarContainer, videoElement;
         let peer, dataConnectie, mijnTeam = "", mijnWebcamStream = null;
         let spelerX = 375; let spelerY = 250; let spelerSchaal = 1.0; 
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
 
-        // Zodra de pagina geladen is, koppelen we direct de HTML elementen aan de variabelen
-        window.addEventListener('DOMContentLoaded', () => {
-            lobby = document.getElementById('lobby');
-            gameScherm = document.getElementById('gameScherm');
-            hud = document.getElementById('hud');
-            teamWeergave = document.getElementById('teamWeergave');
-            besturingInfo = document.getElementById('besturingInfo');
-            avatarContainer = document.getElementById('avatarContainer');
-            videoElement = document.getElementById('remoteVideo');
-        });
-
-        // De functies binden we direct keihard vast aan het window-object
-        window.startAlsHider = function() {
+        function startAlsHider() {
             mijnTeam = "HIDER";
             document.getElementById('hiderCodeSectie').style.display = "block";
 
             const startPeer = () => {
                 if (typeof Peer === 'undefined') {
                     document.getElementById('mijnKamerCode').innerText = "Herstarten...";
-                    return alert("Netwerk laadt nog, ververs de pagina over 5 seconden!");
+                    return alert("Netwerk laadt nog, wacht 3 seconden en klik opnieuw!");
                 }
                 peer = new Peer();
                 peer.on('open', (id) => { document.getElementById('mijnKamerCode').innerText = id; });
@@ -44,12 +87,12 @@
 
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-                .then(stream => { mijnWebcamStream = stream; videoElement.srcObject = stream; startPeer(); })
+                .then(stream => { mijnWebcamStream = stream; document.getElementById('remoteVideo').srcObject = stream; startPeer(); })
                 .catch(() => { alert("Geen camera gevonden, spel start in testmodus."); startPeer(); });
             } else { startPeer(); }
         }
 
-        window.startAlsSeeker = function() {
+        function startAlsSeeker() {
             mijnTeam = "SEEKER";
             const code = document.getElementById('kamercodeInput').value.trim();
             if (!code) return alert("Typ een code!");
@@ -62,28 +105,28 @@
                 if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                     navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(stream => {
                         const call = peer.call(code, stream);
-                        call.on('stream', (remoteStream) => { videoElement.srcObject = remoteStream; });
+                        call.on('stream', (remoteStream) => { document.getElementById('remoteVideo').srcObject = remoteStream; });
                     }).catch(() => {
                         const call = peer.call(code, null);
-                        call.on('stream', (remoteStream) => { videoElement.srcObject = remoteStream; });
+                        call.on('stream', (remoteStream) => { document.getElementById('remoteVideo').srcObject = remoteStream; });
                     });
                 }
             });
         }
 
         function openHetSpel() {
-            lobby.style.display = "none";
-            gameScherm.style.display = "block";
-            hud.style.display = "block";
-            teamWeergave.innerText = mijnTeam;
+            document.getElementById('lobby').style.display = "none";
+            document.getElementById('gameScherm').style.display = "block";
+            document.getElementById('hud').style.display = "block";
+            document.getElementById('teamWeergave').innerText = mijnTeam;
 
             if (mijnTeam === 'HIDER') {
-                teamWeergave.style.color = "#2ed573";
+                document.getElementById('teamWeergave').style.color = "#2ed573";
                 document.getElementById('zoomControls').style.display = "block";
-                besturingInfo.innerText = "Gebruik de pijltjestoetsen om te lopen.";
+                document.getElementById('besturingInfo').innerText = "Gebruik de pijltjestoetsen om te lopen.";
             } else {
-                teamWeergave.style.color = "#ff4757";
-                besturingInfo.innerText = "Klik op de avatar om te killen!";
+                document.getElementById('teamWeergave').style.color = "#ff4757";
+                document.getElementById('besturingInfo').innerText = "Klik op de avatar om te killen!";
             }
             setInterval(gameLoop, 1000 / 60);
         }
@@ -98,8 +141,8 @@
         window.addEventListener('keydown', (e) => { if (e.key in keys) { e.preventDefault(); keys[e.key] = true; } });
         window.addEventListener('keyup', (e) => { if (e.key in keys) { keys[e.key] = false; } });
 
-        window.zoomIn = function() { if (mijnTeam === 'HIDER') { spelerSchaal += 0.15; if (spelerSchaal > 3) spelerSchaal = 3; stuurPositie(); } }
-        window.zoomUit = function() { if (mijnTeam === 'HIDER') { spelerSchaal -= 0.15; if (spelerSchaal < 0.2) spelerSchaal = 0.2; stuurPositie(); } }
+        function zoomIn() { if (mijnTeam === 'HIDER') { spelerSchaal += 0.15; if (spelerSchaal > 3) spelerSchaal = 3; stuurPositie(); } }
+        function zoomUit() { if (mijnTeam === 'HIDER') { spelerSchaal -= 0.15; if (spelerSchaal < 0.2) spelerSchaal = 0.2; stuurPositie(); } }
 
         function gameLoop() {
             if (mijnTeam === 'HIDER') {
@@ -113,10 +156,11 @@
                 if (spelerY < 30) spelerY = 30; if (spelerY > 520) spelerY = 520;
                 if (isBewogen) { stuurPositie(); }
             }
-            if (avatarContainer) {
-                avatarContainer.style.left = spelerX + "px";
-                avatarContainer.style.top = spelerY + "px";
-                avatarContainer.style.transform = `scale(${spelerSchaal})`;
+            const av = document.getElementById('avatarContainer');
+            if (av) {
+                av.style.left = spelerX + "px";
+                av.style.top = spelerY + "px";
+                av.style.transform = `scale(${spelerSchaal})`;
             }
         }
 
@@ -126,7 +170,7 @@
             }
         }
 
-        window.killAvatar = function(event) {
+        function killAvatar(event) {
             if (mijnTeam === 'SEEKER') {
                 event.stopPropagation();
                 alert("Hider gekilld!");
@@ -136,116 +180,5 @@
         }
         function resetAvatar() { spelerX = 375; spelerY = 250; spelerSchaal = 1.0; }
     </script>
-
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #121212;
-            color: white;
-            margin: 0;
-            padding: 0;
-            text-align: center;
-            overflow: hidden;
-        }
-        #lobby {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(20, 20, 20, 0.95);
-            padding: 40px;
-            border-radius: 15px;
-            border: 3px solid #ff4757;
-            z-index: 10;
-        }
-        .btn {
-            padding: 12px 24px;
-            font-size: 16px;
-            margin: 10px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        .btn-hider { background-color: #2ed573; color: white; }
-        .btn-seeker { background-color: #ff4757; color: white; }
-        
-        input {
-            padding: 10px;
-            font-size: 16px;
-            border-radius: 5px;
-            border: 1px solid #444;
-            background: #222;
-            color: white;
-            text-align: center;
-            margin: 10px 0;
-        }
-
-        #gameScherm {
-            position: relative;
-            width: 800px;
-            height: 600px;
-            background-color: #222; 
-            margin: 20px auto;
-            border: 6px solid #333;
-            border-radius: 10px;
-            overflow: hidden;
-            display: none; 
-        }
-
-        #remoteVideo {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            z-index: 1;
-        }
-
-        #avatarContainer {
-            position: absolute;
-            width: 50px;
-            height: 80px;
-            top: 250px;
-            left: 375px;
-            z-index: 5;
-            cursor: pointer;
-            transform-origin: bottom center;
-        }
-        #avatarBody {
-            width: 50px;
-            height: 80px;
-            background-color: #3498db; 
-            border-radius: 10px;
-            position: relative;
-        }
-        #avatarBody::before {
-            content: '';
-            position: absolute;
-            top: -25px;
-            left: 10px;
-            width: 30px;
-            height: 30px;
-            background-color: #ffdbac; 
-            border-radius: 50%;
-        }
-
-        #zoomControls {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 8;
-            display: none;
-            background: rgba(0,0,0,0.8);
-            padding: 10px;
-            border-radius: 10px;
-        }
-        .btn-zoom { background-color: #3498db; color: white; border: none; padding: 10px 20px; margin: 0 5px; border-radius: 5px; cursor: pointer;}
-        #hud { background: rgba(0,0,0,0.8); padding: 10px; display: none; }
-        .code-box { font-size: 24px; color: #2ed573; font-weight: bold; background: #000; padding: 5px; border-radius: 5px; margin: 10px 0; }
-    </style>
-</head>
-<body>
-
+</body>
+</html>
