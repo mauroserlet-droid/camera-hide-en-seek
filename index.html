@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Webcam Hunt - Ultimate GitHub Multiplayer</title>
     
-    <!-- Superstabiele CDN link voor PeerJS (Vraagt ook minder strenge rechten op GitHub) -->
-    <script src="https://cloudflare.com" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <!-- We laden PeerJS nu veilig lokaal in vanuit je eigen GitHub map -->
+    <script src="peerjs.js"></script>
     
     <style>
         body { font-family: Arial, sans-serif; background-color: #121212; color: white; margin: 0; padding: 0; text-align: center; overflow: hidden; }
@@ -41,7 +41,6 @@
         <p>Vul het ID in van een vriend die al online is (optioneel):</p>
         <input type="text" id="connectId" placeholder="ID van vriend..." style="padding: 10px; border-radius: 5px; border: none;"><br><br>
         
-        <!-- ID's toegevoegd aan de knoppen om ze veilig aan te sturen via JS -->
         <button id="hiderBtn" class="btn btn-hider">Word Hider</button>
         <button id="seekerBtn" class="btn btn-seeker">Word Seeker</button>
     </div>
@@ -64,7 +63,6 @@
     </div>
 
     <script>
-        // We verpakken alle code in een veilige check die pas start als PeerJS geladen is
         let mijnTeam = "";
         let mijnId = "";
         let peer;
@@ -76,12 +74,11 @@
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
         let lokaleStream = null;
 
-        // Start de netwerk logica zodra de pagina en alle scripts klaarstaan
         window.addEventListener('DOMContentLoaded', () => {
             
-            // Controleer of PeerJS netjes is ingeladen door de browser
+            // Controleer of je eigen peerjs.js bestand goed is ingeladen
             if (typeof Peer === 'undefined') {
-                document.getElementById('mijnPeerId').innerText = "Fout: Netwerk-module kon niet laden. Ververs de pagina.";
+                document.getElementById('mijnPeerId').innerText = "Fout: peerjs.js is niet gevonden in je GitHub map.";
                 document.getElementById('mijnPeerId').style.color = "#ff4757";
                 return;
             }
@@ -104,7 +101,6 @@
                 });
             });
 
-            // Koppel de knoppen nu VEILIG via JavaScript in plaats van inline HTML onclick
             document.getElementById('hiderBtn').addEventListener('click', () => startSpel('HIDER'));
             document.getElementById('seekerBtn').addEventListener('click', () => startSpel('SEEKER'));
         });
@@ -214,4 +210,18 @@
                     stuurNaarAllen({ type: "kill", target: id });
                 }
             };
+
+            document.getElementById('gameScherm').appendChild(av);
+        }
+
+        function voegVideoToe(id, stream) {
+            if (document.getElementById(`video-${id}`)) return;
+
+            const video = document.createElement('video');
+            video.id = `video-${id}`;
+            video.className = "webcamStream";
+            video.srcObject = stream;
+            video.autoplay = true;
+            video.playsinline = true;
+            video.muted = true;
 
