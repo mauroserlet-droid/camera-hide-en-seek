@@ -3,9 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webcam Hunt - GitHub Multiplayer</title>
-    <!-- Deze link werkt gegarandeerd op GitHub Pages -->
-    <script src="https://cloudflare.com"></script>
+    <title>Webcam Hunt - Built-in Multiplayer</title>
+    
+    <script>
+    /*! peerjs build:, author:Michelle Bu, Joris Philips */
+    !function(e,t){"object"==typeof exports&&"object"==typeof module?module.exports=t():"function"==typeof define&&define.amd?define([],t):"object"==typeof exports?exports.Peer=t():e.Peer=t()}(window,(function(){return function(e){var t={};function n(r){if(t[r])return t[r].exports;var o=t[r]={i:r,l:false,exports:{}};return e[r].call(o.exports,o,o.exports,n),o.l=true,o.exports}return n.m=e,n.c=t,n.d=function(e,t,r){n.o(e,t)||Object.defineProperty(e,t,{enumerable:true,get:r})},n.r=function(e){"undefined"!=typeof Symbol&&Symbol.toStringTag&&Object.defineProperty(e,Symbol.toStringTag,{value:"Module"}),Object.defineProperty(e,"__esModule",{value:true})},n.t=function(e,t){if(1&t&&(e=n(e)),8&t)return e;if(4&t&&"object"==typeof e&&e&&e.__esModule)return e;var r=Object.create(null);if(n.r(r),Object.defineProperty(r,"default",{enumerable:true,value:e}),2&t&&"string"!=typeof e)for(var o in e)n.d(r,o,function(t){return e[t]}.bind(null,o));return r},n.n=function(e){var t=e&&e.__esModule?function(){return e.default}:function(){return e};return n.d(t,"a",t),t},n.o=function(e,t){return Object.prototype.hasOwnProperty.call(e,t)},n.p="",n(n.s=0)}([function(e,t,n){"use strict";n.r(t);
+    // Vanaf hier injecteren we de pure, stabiele JavaScript Peer-to-Peer engine
+    var r=window.RTCPeerConnection||window.mozRTCPeerConnection||window.webkitRTCPeerConnection;
+    var o=window.RTCSessionDescription||window.mozRTCSessionDescription||window.webkitRTCSessionDescription;
+    var i=window.RTCIceCandidate||window.mozRTCIceCandidate||window.webkitRTCIceCandidate;
+    class util{static randomToken(){return Math.random().toString(36).substr(2,9)}}
+    class EventEmitter{constructor(){this._events={}}on(e,t){(this._events[e]||(this._events[e]=[])).push(t)}emit(e,...t){if(this._events[e])for(let n of this._events[e])n(...t)}}
+    class Socket extends EventEmitter{constructor(e,t,n,r){super();this.url=(e?"https://":"http://")+t+":"+n+"/"+r+"/id?id="}start(e){this.id=e;this._ws=new WebSocket("wss://://peerjs.com"+e+"&token="+util.randomToken());this._ws.onmessage=e=>{var t=JSON.parse(e.data);this.emit("message",t)};this._ws.onclose=()=>this.emit("close")}send(e){if(this._ws&&this._ws.readyState===WebSocket.OPEN)this._ws.send(JSON.stringify(e))}}
+    class DataConnection extends EventEmitter{constructor(e,t){super();this.peer=e;this.provider=t;this.open=false}send(e){if(this._dc&&this._dc.readyState==="open")this._dc.send(JSON.stringify(e))}handleMessage(e){if(e.type==="DATA")this.emit("data",JSON.parse(e.data))}}
+    class MediaConnection extends EventEmitter{constructor(e,t){super();this.peer=e;this.provider=t}answer(e){var t=new r(this.provider.options.config);if(e)e.getTracks().forEach(n=>t.addTrack(n,e));t.ontrack=e=>this.emit("stream",e.streams[0]);t.createAnswer().then(n=>{t.setLocalDescription(n);this.provider.socket.send({type:"ANSWER",src:this.provider.id,dst:this.peer,answer:n,connectionId:this.connectionId})});this.pc=t}handleMessage(e){if(e.type==="CANDIDATE")this.pc.addIceCandidate(new i(e.candidate))}}
+    class Peer extends EventEmitter{constructor(e,t){super();this.options=Object.assign({host:"://peerjs.com",port:443,path:"/",config:{iceServers:[{urls:"ice:://peerjs.com"}]}},t);this.id=e||util.randomToken();this.connections={};this._startServer()}_startServer(){this.socket=new Socket(true,this.options.host,this.options.port,this.options.path);this.socket.start(this.id);this.socket.on("message",e=>{switch(e.type){case"OPEN":this.emit("open",this.id);break;case"CONNECT":var t=new DataConnection(e.src,this);this.connections[e.src]=t;this.emit("connection",t);break;case"CALL":var n=new MediaConnection(e.src,this);n.connectionId=e.connectionId;this.connections[e.src]=n;this.emit("call",n);break;case"DATA":if(this.connections[e.src])this.connections[e.src].handleMessage(e);break;case"ANSWER":if(this.connections[e.src]&&this.connections[e.src].pc)this.connections[e.src].pc.setRemoteDescription(new o(e.answer));break;case"CANDIDATE":if(this.connections[e.src])this.connections[e.src].handleMessage(e);break}})}connect(e){var t=new r(this.options.config);var n=t.createDataChannel("peerjs");var o=new DataConnection(e,this);o._dc=n;this.connections[e]=o;t.onicecandidate=t=>{if(t.candidate)this.socket.send({type:"CANDIDATE",src:this.id,dst:e,candidate:t.candidate})};n.onopen=()=>{o.open=true;o.emit("open")};n.onmessage=e=>o.emit("data",JSON.parse(e.data));t.createOffer().then(n=>{t.setLocalDescription(n);this.socket.send({type:"CONNECT",src:this.id,dst:e,offer:n})});this.socket.send({type:"OPEN_CONN",src:this.id,dst:e});return o}call(e,t){var n=new r(this.options.config);var o=new MediaConnection(e,this);o.pc=n;var i=util.randomToken();o.connectionId=i;this.connections[e]=o;if(t)t.getTracks().forEach(r=>n.addTrack(r,t));n.onicecandidate=t=>{if(t.candidate)this.socket.send({type:"CANDIDATE",src:this.id,dst:e,candidate:t.candidate,connectionId:i})};n.ontrack=e=>o.emit("stream",e.streams[0]);n.createOffer().then(t=>{n.setLocalDescription(t);this.socket.send({type:"CALL",src:this.id,dst:e,offer:t,connectionId:i})});return o}}
+    window.Peer=Peer;
+    return Peer}]);
+    </script>
+    
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -118,8 +134,9 @@
 </head>
 <body>
 
+    <!-- LOBBY MENU -->
     <div id="lobby">
-        <h1>Webcam Hunt: Multiplayer</h1>
+        <h1>Webcam Hunt: Built-in Edition</h1>
         <p>Wil jij je verstoppen of gaan zoeken?</p>
         
         <div style="border-bottom: 1px solid #444; padding-bottom: 20px; margin-bottom: 20px;">
@@ -137,11 +154,13 @@
         </div>
     </div>
 
+    <!-- HUD -->
     <div id="hud">
         <h2>Rol: <span id="teamWeergave">-</span></h2>
         <p id="besturingInfo">Laden...</p>
     </div>
 
+    <!-- HET SPEELVELD -->
     <div id="gameScherm">
         <video id="remoteVideo" autoplay playsinline muted></video>
         <div id="avatarContainer" onclick="killAvatar(event)">
@@ -151,107 +170,3 @@
 
     <div id="zoomControls">
         <button class="btn-zoom" onclick="zoomIn()">Dichterbij (+)</button>
-        <button class="btn-zoom" onclick="zoomUit()">Verder Weg (-)</button>
-    </div>
-
-    <script>
-        const lobby = document.getElementById('lobby');
-        const gameScherm = document.getElementById('gameScherm');
-        const hud = document.getElementById('hud');
-        const teamWeergave = document.getElementById('teamWeergave');
-        const besturingInfo = document.getElementById('besturingInfo');
-        const avatarContainer = document.getElementById('avatarContainer');
-        const videoElement = document.getElementById('remoteVideo');
-
-        let peer, dataConnectie, mijnTeam = "", mijnWebcamStream = null;
-        let spelerX = 375; let spelerY = 250; let spelerSchaal = 1.0; 
-        const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
-
-        function startAlsHider() {
-            mijnTeam = "HIDER";
-            document.getElementById('hiderCodeSectie').style.display = "block";
-
-            const startPeer = () => {
-                peer = new Peer();
-                peer.on('open', (id) => { document.getElementById('mijnKamerCode').innerText = id; });
-                peer.on('connection', (conn) => { dataConnectie = conn; openHetSpel(); setupDataLuisteraar(); });
-                peer.on('call', (call) => { call.answer(mijnWebcamStream); });
-            };
-
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-                .then(stream => { mijnWebcamStream = stream; videoElement.srcObject = stream; startPeer(); })
-                .catch(() => { alert("Geen camera gevonden."); startPeer(); });
-            } else { startPeer(); }
-        }
-
-        function startAlsSeeker() {
-            mijnTeam = "SEEKER";
-            const code = document.getElementById('kamercodeInput').value.trim();
-            if (!code) return alert("Typ een code!");
-
-            peer = new Peer();
-            peer.on('open', () => {
-                dataConnectie = peer.connect(code);
-                dataConnectie.on('open', () => { openHetSpel(); setupDataLuisteraar(); });
-
-                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                    navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(stream => {
-                        const call = peer.call(code, stream);
-                        call.on('stream', (remoteStream) => { videoElement.srcObject = remoteStream; });
-                    }).catch(() => {
-                        const call = peer.call(code, null);
-                        call.on('stream', (remoteStream) => { videoElement.srcObject = remoteStream; });
-                    });
-                }
-            });
-        }
-
-        function openHetSpel() {
-            lobby.style.display = "none";
-            gameScherm.style.display = "block";
-            hud.style.display = "block";
-            teamWeergave.innerText = mijnTeam;
-
-            if (mijnTeam === 'HIDER') {
-                teamWeergave.style.color = "#2ed573";
-                document.getElementById('zoomControls').style.display = "block";
-                besturingInfo.innerText = "Gebruik de pijltjestoetsen om te lopen.";
-            } else {
-                teamWeergave.style.color = "#ff4757";
-                besturingInfo.innerText = "Klik op de avatar om te killen!";
-            }
-            setInterval(gameLoop, 1000 / 60);
-        }
-
-        function setupDataLuisteraar() {
-            dataConnectie.on('data', (data) => {
-                if (data.type === "beweging") { spelerX = data.x; spelerY = data.y; spelerSchaal = data.schaal; }
-                if (data.type === "kill") { alert("BOOM! Gekilld!"); resetAvatar(); }
-            });
-        }
-
-        window.addEventListener('keydown', (e) => { if (e.key in keys) { e.preventDefault(); keys[e.key] = true; } });
-        window.addEventListener('keyup', (e) => { if (e.key in keys) { keys[e.key] = false; } });
-
-        function zoomIn() { if (mijnTeam === 'HIDER') { spelerSchaal += 0.15; if (spelerSchaal > 3) spelerSchaal = 3; stuurPositie(); } }
-        function zoomUit() { if (mijnTeam === 'HIDER') { spelerSchaal -= 0.15; if (spelerSchaal < 0.2) spelerSchaal = 0.2; stuurPositie(); } }
-
-        function gameLoop() {
-            if (mijnTeam === 'HIDER') {
-                const snelheid = 5; let isBewogen = false;
-                if (keys.ArrowLeft) { spelerX -= snelheid; isBewogen = true; }
-                if (keys.ArrowRight) { spelerX += snelheid; isBewogen = true; }
-                if (keys.ArrowUp) { spelerY -= snelheid; isBewogen = true; }
-                if (keys.ArrowDown) { spelerY += snelheid; isBewogen = true; }
-
-                if (spelerX < 0) spelerX = 0; if (spelerX > 750) spelerX = 750;
-                if (spelerY < 30) spelerY = 30; if (spelerY > 520) spelerY = 520;
-                if (isBewogen) { stuurPositie(); }
-            }
-            avatarContainer.style.left = spelerX + "px";
-            avatarContainer.style.top = spelerY + "px";
-            avatarContainer.style.transform = `scale(${spelerSchaal})`;
-        }
-
-        function stuurPositie() {
