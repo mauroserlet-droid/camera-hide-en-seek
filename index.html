@@ -30,7 +30,8 @@
         .btn-zoom { background-color: #3498db; color: white; border: none; padding: 10px 20px; margin: 0 5px; border-radius: 5px; cursor: pointer;}
         #hud { background: rgba(0,0,0,0.8); padding: 10px; display: none; }
         
-        #connectieBlok { display: none; margin-top: 20px; border-top: 1px solid #444; padding-top: 15px; }
+        /* GECORRIGEERD: Staat nu standaard op display: block zodat het direct zichtbaar is */
+        #connectieBlok { display: block; window-style: block; margin-top: 20px; border-top: 1px solid #444; padding-top: 15px; }
         textarea { width: 100%; height: 50px; background: #333; color: white; border: 1px solid #555; border-radius: 5px; margin-top: 5px; resize: none; font-size: 10px; }
         .stap { background: rgba(255,255,255,0.05); padding: 8px; margin: 8px 0; border-radius: 8px; text-align: left; font-size: 12px; }
     </style>
@@ -43,16 +44,15 @@
         <p>Spelersnaam: <input type="text" id="spelerNaamInput" value="Mauro" style="padding: 5px; border-radius: 5px; border: none; width: 120px; text-align: center;"></p>
         
         <div id="stap1Blok">
-            <p><strong>Stap 1:</strong> Kies je rol om de lobby te starten.</p>
-            <!-- GECORRIGEERD: Roept nu netjes openLobbySetup aan in plaats van initLobby -->
-            <button class="btn btn-hider" onclick="document.getElementById('stap1Blok').style.display='none'; openLobbySetup('HIDER');">Word Hider</button>
-            <button class="btn btn-seeker" onclick="document.getElementById('stap1Blok').style.display='none'; openLobbySetup('SEEKER');">Word Seeker</button>
+            <p><strong>Stap 1:</strong> Kies je rol om een code te genereren.</p>
+            <button class="btn btn-hider" onclick="openLobbySetup('HIDER');">Word Hider</button>
+            <button class="btn btn-seeker" onclick="openLobbySetup('SEEKER');">Word Seeker</button>
         </div>
 
         <div id="connectieBlok">
             <div class="stap">
-                <strong>Stap 2:</strong> Deel deze code met de andere computer:
-                <textarea id="lokaleCode" readonly onclick="this.select()"></textarea>
+                <strong>Stap 2:</strong> Deel deze code met de andere computer (verschijnt na Stap 1):
+                <textarea id="lokaleCode" placeholder="Klik eerst hierboven op een rol..." readonly onclick="this.select()"></textarea>
             </div>
 
             <div class="stap">
@@ -96,9 +96,10 @@
             mijnTeam = rol;
             mijnNaam = document.getElementById('spelerNaamInput').value.trim() || "Mauro";
             
-            document.getElementById('connectieBlok').style.display = "block";
+            // Verander de tekst van de knoppen zodat je ziet wat je gekozen hebt
+            document.getElementById('stap1Blok').innerHTML = "<p>Gekozen rol: <strong style='color:#2ed573;'>" + mijnTeam + "</strong>. Kopieer nu de code hieronder!</p>";
 
-            // Netwerkmotor starten zonder externe servers om CSP-fouten te vermijden
+            // Netwerkmotor starten
             peerConnection = new RTCPeerConnection({ iceServers: [] });
             
             dataChannel = peerConnection.createDataChannel("gameChannel");
@@ -119,14 +120,13 @@
             .then(offer => peerConnection.setLocalDescription(offer))
             .catch(err => console.log(err));
 
-            // Vraag nu veilig de camera aan in de achtergrond
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 navigator.mediaDevices.getUserMedia({ video: true, audio: false })
                 .then(stream => {
                     lokaleStream = stream;
                     voegVideoToe(mijnId, lokaleStream, mijnNaam + " (Jij)");
                     lokaleStream.getTracks().forEach(track => peerConnection.addTrack(track, lokaleStream));
-                }).catch(e => console.log("Camera overgeslagen. Spel start zonder video."));
+                }).catch(e => console.log("Camera overgeslagen."));
             }
         }
 
@@ -183,4 +183,3 @@
         function openHetSpeelveld() {
             document.getElementById('lobby').style.display = "none";
             document.getElementById('gameScherm').style.display = "block";
-            document.getElementById('hud').style.display = "block";
