@@ -73,7 +73,9 @@
         let kamer = "";
         
         let spelersData = {};
-        let spelerX = 375, spelerY = 250, spelerSchaal = 1.0;
+        let spelerX = 375;
+        let spelerY = 250;
+        let spelerSchaal = 1.0;
         let alleKlaar = [];
         let lokaleStream = null;
         let countdown = 60;
@@ -83,13 +85,11 @@
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
 
         window.addEventListener('DOMContentLoaded', () => {
-            // Controleer of iemand binnenkomt via een gedeelde link (bijv. ?room=MauroKamer)
             const urlParams = new URLSearchParams(window.location.search);
             const gekregenKamer = urlParams.get('room');
 
             if (gekregenKamer) {
                 kamer = gekregenKamer;
-                // Verberg het aanmaak-vak en toon meteen de startknop voor de gasten
                 document.getElementById('kamersSectie').style.display = "none";
                 document.getElementById('outputLink').value = window.location.href;
                 document.getElementById('deellink-sectie').style.display = "block";
@@ -100,7 +100,6 @@
             mijnNaam = document.getElementById('spelerNaam').value.trim() || "Mauro";
             kamer = document.getElementById('kamernaam').value.trim() || "MauroKamer";
             
-            // Bouw de link op basis van jouw echte GitHub domeinnaam en kamernaam
             const completeLink = window.location.origin + window.location.pathname + "?room=" + kamer;
             
             document.getElementById('outputLink').value = completeLink;
@@ -110,7 +109,6 @@
         function drukKlaarKnop() {
             mijnNaam = document.getElementById('spelerNaam').value.trim() || "Mauro";
             
-            // Activeer de netwerkmotor via jouw echte GitHub domein (werkt nu 100% vlekkeloos!)
             kanaal = new BroadcastChannel("webcam_hunt_channel_" + kamer);
             setupNetwerkLuisteraar();
 
@@ -174,9 +172,8 @@
             if (mijnTeam !== "PENDING") return;
             document.getElementById("statusTekst").innerText = "Wachten op groep... (" + alleKlaar.length + " spelers klaar)";
             
-            // De eerste speler in de alfabetische lijst start de rollenverdeling
             alleKlaar.sort();
-            if (alleKlaar.length >= 2 && mijnId === alleKlaar[0]) {
+            if (alleKlaar.length >= 2 && mijnId === alleKlaar) {
                 setTimeout(() => {
                     let s = alleKlaar[Math.floor(Math.random() * alleKlaar.length)];
                     let h = alleKlaar.filter(id => id !== s);
@@ -187,3 +184,9 @@
         }
 
         function startDeRonde(s, h) {
+            mijnTeam = (mijnId === s) ? "SEEKER" : "HIDER";
+            document.getElementById("statusTekst").innerText = "Ronde gestart! Rol: " + mijnTeam;
+            document.getElementById("gameScherm").style.display = "block";
+            
+            alleKlaar.forEach(id => {
+                let rol = (id === s) ? "SEEKER" : "HIDER";
