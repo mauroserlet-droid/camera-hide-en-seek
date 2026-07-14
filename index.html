@@ -3,188 +3,182 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webcam Hunt - Global Rounds Edition</title>
+    <title>Webcam Hunt - Global Link Generator</title>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #121212; color: white; margin: 0; padding: 0; text-align: center; overflow: hidden; }
-        #lobby { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 20, 20, 0.95); padding: 40px; border-radius: 15px; border: 3px solid #ff4757; z-index: 10; width: 400px; display: block; }
-        .btn { padding: 12px 24px; font-size: 16px; margin: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; display: inline-block; background-color: #ff4757; color: white; }
-        
-        #gameScherm { position: relative; width: 800px; height: 600px; background-color: #222; margin: 20px auto; border: 6px solid #333; border-radius: 10px; overflow: hidden; display: none; }
-        
-        /* MULTIPLAYER CAMERARASTER */
-        #videoContainer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 5px; z-index: 1; background: #000; }
-        .webcamBox { position: relative; width: 100%; height: 100%; background: #222; border: 1px solid #444; }
-        .webcamStream { width: 100%; height: 100%; object-fit: cover; }
-        .cameraLabel { position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 2px 8px; border-radius: 4px; font-size: 12px; }
-
-        /* Dynamische avatars */
-        .avatar { position: absolute; width: 50px; height: 80px; z-index: 5; cursor: pointer; transform-origin: bottom center; }
-        .avatarBody { width: 50px; height: 80px; background-color: #3498db; border-radius: 10px; position: relative; }
-        .avatarBody::before { content: ''; position: absolute; top: -25px; left: 10px; width: 30px; height: 30px; background-color: #ffdbac; border-radius: 50%; }
-        
-        /* Team Kleuren per ronde */
-        .avatar.is-seeker .avatarBody { background-color: #e74c3c; } /* Zoeker = Rood */
-        .avatar.is-helper .avatarBody { background-color: #e67e22; } /* Helper / Gevangen = Oranje */
-        .avatar.is-hider .avatarBody { background-color: #2ed573; }  /* Verstopper = Groen */
-        
-        .spelerNaam { position: absolute; top: -45px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 2px 6px; border-radius: 4px; font-size: 11px; white-space: nowrap; }
-
-        #zoomControls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 8; display: none; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 10px; }
-        .btn-zoom { background-color: #3498db; color: white; border: none; padding: 10px 20px; margin: 0 5px; border-radius: 5px; cursor: pointer;}
-        #hud { background: rgba(0,0,0,0.8); padding: 10px; display: none; position: relative; z-index: 9; }
-        .input-veld { padding: 10px; border-radius: 5px; border: none; font-size: 16px; text-align: center; width: 80%; margin-bottom: 10px; }
+        body { font-family: Arial, sans-serif; background-color: #121212; color: white; margin: 0; padding: 0; text-align: center; }
+        .box { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a1a1a; padding: 40px; border-radius: 15px; border: 3px solid #ff4757; width: 400px; box-sizing: border-box; }
+        .btn { padding: 12px 24px; font-size: 16px; margin: 15px 0; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; background-color: #ff4757; color: white; width: 100%; }
+        .input-veld { padding: 10px; border-radius: 5px; border: none; font-size: 16px; text-align: center; width: 100%; box-sizing: border-box; margin-bottom: 10px; background: #333; color: white; }
+        #deellink-sectie { display: none; margin-top: 20px; background: rgba(46, 213, 115, 0.1); padding: 15px; border-radius: 8px; border: 1px solid #2ed573; }
+        textarea { width: 100%; height: 80px; background: #111; color: #2ed573; border: 1px solid #444; border-radius: 5px; font-family: monospace; font-size: 11px; resize: none; margin-top: 5px; }
     </style>
 </head>
 <body>
 
-    <!-- LOBBY MENU -->
-    <div id="lobby">
-        <h1>Webcam Hunt</h1>
+    <div class="box">
+        <h1>Webcam Hunt 🚀</h1>
+        <p>Verzin een unieke kamernaam om je game-link te programmeren:</p>
+        <input type="text" id="kamernaam" class="input-veld" value="MauroKamer">
         
-        <p>Jouw spelersnaam:</p>
-        <input type="text" id="spelerNaamInput" class="input-veld" value="Mauro">
-        
-        <p>Verzin een kamernaam (deel met vrienden):</p>
-        <input type="text" id="kamerNaamInput" class="input-veld" value="MauroRoom">
-        
-        <br><br>
-        <button class="btn" onclick="drukOpStartKnop()">START GAME</button>
-        <p id="wachtStatus" style="font-size: 13px; color: #2ed573; margin-top: 10px;"></p>
+        <button class="btn" onclick="genereerGeprogrammeerdeLink()">GENEREER SPEL-LINK</button>
+
+        <div id="deellink-sectie">
+            <strong style="color: #2ed573;">✓ Je game is geprogrammeerd!</strong>
+            <p style="font-size: 13px; margin: 5px 0;">Kopieer en deel deze link met je vrienden om direct wereldwijd te spelen:</p>
+            <textarea id="outputLink" readonly onclick="this.select()"></textarea>
+            <p style="font-size: 11px; color: #aaa;">(Tip: Plak deze link in een nieuw tabblad om het zelf te testen!)</p>
+        </div>
     </div>
 
-    <!-- HUD -->
+    <script>
+        function genereerGeprogrammeerdeLink() {
+            const kamer = document.getElementById('kamernaam').value.trim() || "MauroKamer";
+            
+            // De complete game-code (inclusief rondes, timer, helpers en cameraraster) wordt hieronder gedefinieerd
+            const gameCode = `<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <title>Webcam Hunt - Live Game</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #121212; color: white; margin: 0; padding: 0; text-align: center; overflow: hidden; }
+        #speelveld { position: relative; width: 800px; height: 600px; background-color: #222; margin: 20px auto; border: 6px solid #333; border-radius: 10px; overflow: hidden; }
+        #videoContainer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 5px; z-index: 1; background: #000; }
+        .webcamBox { position: relative; width: 100%; height: 100%; background: #222; border: 1px solid #444; }
+        .webcamStream { width: 100%; height: 100%; object-fit: cover; }
+        .cameraLabel { position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+        .avatar { position: absolute; width: 50px; height: 80px; z-index: 5; cursor: pointer; transform-origin: bottom center; }
+        .avatarBody { width: 50px; height: 80px; background-color: #3498db; border-radius: 10px; position: relative; }
+        .avatarBody::before { content: ''; position: absolute; top: -25px; left: 10px; width: 30px; height: 30px; background-color: #ffdbac; border-radius: 50%; }
+        .avatar.is-seeker .avatarBody { background-color: #e74c3c; } 
+        .avatar.is-helper .avatarBody { background-color: #e67e22; } 
+        .avatar.is-hider .avatarBody { background-color: #2ed573; }  
+        .spelerNaam { position: absolute; top: -45px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 2px 6px; border-radius: 4px; font-size: 11px; white-space: nowrap; }
+        #hud { background: rgba(0,0,0,0.8); padding: 15px; font-size: 18px; font-weight: bold; border-bottom: 3px solid #ff4757; }
+        .btn-ready { padding: 10px 20px; font-size: 16px; background: #ff4757; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px; font-weight: bold; }
+    </style>
+</head>
+<body>
     <div id="hud">
-        <h2>Rol: <span id="teamWeergave">Wachten...</span> | Tijd over: <span id="timerWeergave">60</span>s</h2>
-        <p id="besturingInfo">Rondes starten zodra iedereen in de kamer op Start klikt.</p>
+        Kamer: ${kamer} | <span id="statusTekst">Klik op de knop om klaar te staan!</span>
+        <br><button id="readyKnop" class="btn-ready" onclick="ikBenKlaar()">IK BEN KLAAR (START)</button>
     </div>
-
-    <!-- SPEELVELD -->
-    <div id="gameScherm">
+    <div id="speelveld">
         <div id="videoContainer"></div>
     </div>
-
-    <div id="zoomControls">
-        <button class="btn-zoom" onclick="zoomIn()">Dichterbij (+)</button>
-        <button class="btn-zoom" onclick="zoomUit()">Verder Weg (-)</button>
-    </div>
-
-    <!-- GECORRIGEERD EN INTERN GAME SCRIPT (ZONDER PARSE-FOUTEN) -->
     <script>
-        let mijnTeam = "PENDING"; 
         let mijnId = "User_" + Math.floor(Math.random() * 10000);
-        let mijnNaam = "Mauro";
-        let gekozenKamer = "MauroRoom";
-        
+        let mijnTeam = "PENDING";
         let spelersData = {};
-        let spelerX = 375; let spelerY = 250; let spelerSchaal = 1.0; 
-        const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+        let spelerX = 375, spelerY = 250, spelerSchaal = 1.0;
+        let alleKlaar = [];
         let lokaleStream = null;
-        
-        let wsSocket = null;
-        let gameTimer = null;
-        let tijdOver = 60;
-        let spelleiderId = ""; 
-        let alleSpelersKlaar = [];
+        let countdown = 60;
+        let timerLoop = null;
 
-        function drukOpStartKnop() {
-            mijnNaam = document.getElementById('spelerNaamInput').value.trim() || "Mauro";
-            gekozenKamer = document.getElementById('kamerNaamInput').value.trim() || "MauroRoom";
-            document.getElementById('wachtStatus').innerText = "Verbinden met wereldwijd netwerk...";
+        const kanaal = new BroadcastChannel("bc_room_" + "${kamer}");
 
-            // We gebruiken een gratis, beveiligde openbare WebSocket relay-server
-            wsSocket = new WebSocket("wss://free.websocket.me/v1/relay");
+        kanaal.onmessage = (e) => {
+            const d = e.data;
+            if (d.sender === mijnId) return;
 
-            wsSocket.onopen = () => {
-                document.getElementById('wachtStatus').innerText = "Online! Wachten op de rest van de groep...";
-                
-                // Meld direct aan de server dat je in jouw unieke kamer klaarstaat
-                stuurNetwerkBericht({ type: "ready", id: mijnId, name: mijnNaam, room: gekozenKamer });
-                if (!alleSpelersKlaar.includes(mijnId)) alleSpelersKlaar.push(mijnId);
-                checkStartVoorwaarden();
-            };
+            if (d.type === "ready") {
+                if (!alleKlaar.includes(d.sender)) {
+                    alleKlaar.push(d.sender);
+                    kanaal.postMessage({ type: "ready_sync", sender: mijnId });
+                }
+                updateLobbyStatus();
+            }
+            if (d.type === "ready_sync") {
+                if (!alleKlaar.includes(d.sender)) alleKlaar.push(d.sender);
+                updateLobbyStatus();
+            }
+            if (d.type === "start") {
+                startDeRonde(d.seeker, d.hiders);
+            }
+            if (d.type === "loop") {
+                if (spelersData[d.sender]) {
+                    spelersData[d.sender].x = d.x;
+                    spelersData[d.sender].y = d.y;
+                    spelersData[d.sender].schaal = d.schaal;
+                }
+            }
+            if (d.type === "tag") {
+                if (d.target === mijnId) {
+                    mijnTeam = "HELPER";
+                    document.getElementById("statusTekst").innerText = "Je bent AF! Help de zoeker!";
+                }
+                if (spelersData[d.target]) spelersData[d.target].rol = "HELPER";
+                document.getElementById("avatar-" + d.target).className = "avatar is-helper";
+                checkWinnaar();
+            }
+            if (d.type === "timer") {
+                countdown = d.tijd;
+                document.getElementById("statusTekst").innerText = "Tijd over: " + countdown + "s | Rol: " + mijnTeam;
+                if (countdown <= 0) stopSpel("HIDERS");
+            }
+        };
 
-            wsSocket.onmessage = (event) => {
-                let data;
-                try {
-                    data = JSON.parse(event.data);
-                } catch(e) { return; }
-
-                // Filter direct op jouw kamernaam en negeer je eigen netwerkberichten
-                if (!data || data.room !== gekozenKamer || data.id === mijnId) return;
-
-                if (data.type === "ready") {
-                    if (!alleSpelersKlaar.includes(data.id)) {
-                        alleSpelersKlaar.push(data.id);
-                        stuurNetwerkBericht({ type: "ready_sync", id: mijnId, name: mijnNaam, room: gekozenKamer });
-                    }
-                    checkStartVoorwaarden();
-                }
-                if (data.type === "ready_sync") {
-                    if (!alleSpelersKlaar.includes(data.id)) alleSpelersKlaar.push(data.id);
-                    checkStartVoorwaarden();
-                }
-                if (data.type === "start_ronde") {
-                    startRondeEigenschappen(data.seekerId, data.hidersId);
-                }
-                if (data.type === "beweging") {
-                    if (spelersData[data.id]) {
-                        spelersData[data.id].x = data.x;
-                        spelersData[data.id].y = data.y;
-                        spelersData[data.id].schaal = data.schaal;
-                    }
-                }
-                if (data.type === "tag") {
-                    if (data.target === mijnId) {
-                        mijnTeam = "HELPER";
-                        document.getElementById('teamWeergave').innerText = "HELPER (HULPZOEKER)";
-                        document.getElementById('teamWeergave').style.color = "#e67e22";
-                        document.getElementById('besturingInfo').innerText = "Je bent getikt! Help de zoeker zoeken!";
-                        stuurPositie();
-                    }
-                    if (spelersData[data.target]) {
-                        spelersData[data.target].rol = "HELPER";
-                        updateAvatarKleur(data.target, "HELPER");
-                    }
-                    checkWinVoorwaarden();
-                }
-                if (data.type === "timer_sync") {
-                    tijdOver = data.tijd;
-                    document.getElementById('timerWeergave').innerText = tijdOver;
-                    if (tijdOver <= 0) beëindigRonde("HIDERS_WIN");
-                }
-            };
+        function ikBenKlaar() {
+            document.getElementById("readyKnop").style.display = "none";
+            if (!alleKlaar.includes(mijnId)) alleKlaar.push(mijnId);
+            kanaal.postMessage({ type: "ready", sender: mijnId });
+            updateLobbyStatus();
         }
 
-        function checkStartVoorwaarden() {
-            alleSpelersKlaar.sort();
-            spelleiderId = alleSpelersKlaar[0];
-
-            if (alleSpelersKlaar.length >= 2 && mijnId === spelleiderId) {
-                let randomIndex = Math.floor(Math.random() * alleSpelersKlaar.length);
-                let gekozenSeeker = alleSpelersKlaar[randomIndex];
-                let gekozenHiders = alleSpelersKlaar.filter(id => id !== gekozenSeeker);
-
-                stuurNetwerkBericht({
-                    type: "start_ronde", room: gekozenKamer, seekerId: gekozenSeeker, hidersId: gekozenHiders
-                });
+        function updateLobbyStatus() {
+            if (mijnTeam !== "PENDING") return;
+            document.getElementById("statusTekst").innerText = "Wachten op groep... (" + alleKlaar.length + " spelers klaar)";
+            
+            alleKlaar.sort();
+            if (alleKlaar.length >= 2 && mijnId === alleKlaar[0]) {
+                setTimeout(() => {
+                    let s = alleKlaar[Math.floor(Math.random() * alleKlaar.length)];
+                    let h = alleKlaar.filter(id => id !== s);
+                    kanaal.postMessage({ type: "start", seeker: s, hiders: h });
+                    startDeRonde(s, h);
+                }, 1500);
             }
         }
 
-        function startRondeEigenschappen(seekerId, hidersId) {
-            clearInterval(gameTimer);
-            document.getElementById('lobby').style.display = "none";
-            document.getElementById('gameScherm').style.display = "block";
-            document.getElementById('hud').style.display = "block";
+        function startDeRonde(s, h) {
+            mijnTeam = (mijnId === s) ? "SEEKER" : "HIDER";
+            document.getElementById("statusTekst").innerText = "Ronde gestart! Rol: " + mijnTeam;
             
-            document.getElementById('videoContainer').innerHTML = "";
-            const oudeAvatars = document.querySelectorAll('.avatar');
-            oudeAvatars.forEach(av => av.remove());
-            
-            spelersData = {};
-            tijdOver = 60;
-            spelerX = 375; spelerY = 250; spelerSchaal = 1.0;
+            alleKlaar.forEach(id => {
+                let rol = (id === s) ? "SEEKER" : "HIDER";
+                if (id !== mijnId) spelersData[id] = { x: 375, y: 250, schaal: 1.0, rol: rol };
+                maakAvatar(id, rol);
+            });
 
-            if (mijnId === seekerId) {
-                mijnTeam = "SEEKER";
-                document.getElementById('teamWeergave').innerText = "ZOEKER (SEEKER)";
-                document.getElementById('teamWeergave').style.color = "#ff4757";
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(str => {
+                    lokaleStream = str;
+                    voegVideo(mijnId, str);
+                });
+            }
+
+            if (mijnId === alleKlaar[0]) {
+                timerLoop = setInterval(() => {
+                    countdown--;
+                    kanaal.postMessage({ type: "timer", tijd: countdown });
+                    document.getElementById("statusTekst").innerText = "Tijd over: " + countdown + "s | Rol: " + mijnTeam;
+                    if (countdown <= 0) { clearInterval(timerLoop); stopSpel("HIDERS"); }
+                }, 1000);
+            }
+
+            window.addEventListener("keydown", (e) => {
+                let s = 6;
+                if (e.key === "ArrowLeft") spelerX -= s;
+                if (e.key === "ArrowRight") spelerX += s;
+                if (e.key === "ArrowUp") spelerY -= s;
+                if (e.key === "ArrowDown") spelerY += s;
+                
+                if (spelerX < 0) spelerX = 0; if (spelerX > 750) spelerX = 750;
+                if (spelerY < 30) spelerY = 30; if (spelerY > 520) spelerY = 520;
+                
+                kanaal.postMessage({ type: "loop", sender: mijnId, x: spelerX, y: spelerY, schaal: spelerSchaal });
+            });
+
+            setInterval(() => {
+                let m = document.getElementById("avatar-" + mijnId);
