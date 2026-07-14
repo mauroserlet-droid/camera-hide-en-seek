@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webcam Hunt - Global Rounds Edition</title>
+    <title>Webcam Hunt - Global Serverless Rounds</title>
     <style>
         body { font-family: Arial, sans-serif; background-color: #121212; color: white; margin: 0; padding: 0; text-align: center; overflow: hidden; }
         #lobby { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 20, 20, 0.95); padding: 40px; border-radius: 15px; border: 3px solid #ff4757; z-index: 10; width: 400px; display: block; }
@@ -33,7 +33,6 @@
         .btn-zoom { background-color: #3498db; color: white; border: none; padding: 10px 20px; margin: 0 5px; border-radius: 5px; cursor: pointer;}
         #hud { background: rgba(0,0,0,0.8); padding: 10px; display: none; position: relative; z-index: 9; }
         .input-veld { padding: 10px; border-radius: 5px; border: none; font-size: 16px; text-align: center; width: 80%; margin-bottom: 10px; }
-        #deellink { width: 90%; padding: 5px; background: #333; color: #2ed573; border: 1px solid #555; text-align: center; font-family: monospace; font-size: 11px; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -45,8 +44,8 @@
         <p>Jouw spelersnaam:</p>
         <input type="text" id="spelerNaamInput" class="input-veld" value="Mauro">
         
-        <p>Deel deze link met vrienden over de hele wereld:</p>
-        <input type="text" id="deellink" readonly onclick="this.select()">
+        <p>Verzin een kamernaam (deel met je vrienden):</p>
+        <input type="text" id="kamerNaamInput" class="input-veld" value="MauroRoom">
         
         <br><br>
         <button class="btn" onclick="drukOpStartKnop()">START GAME</button>
@@ -56,7 +55,7 @@
     <!-- HUD -->
     <div id="hud">
         <h2>Rol: <span id="teamWeergave">Wachten...</span> | Tijd over: <span id="timerWeergave">60</span>s</h2>
-        <p id="besturingInfo">Rondes starten zodra iedereen op Start klikt.</p>
+        <p id="besturingInfo">Rondes starten zodra iedereen in de kamer op Start klikt.</p>
     </div>
 
     <!-- SPEELVELD -->
@@ -73,86 +72,85 @@
         let mijnTeam = "PENDING"; 
         let mijnId = "User_" + Math.floor(Math.random() * 10000);
         let mijnNaam = "Mauro";
-        let kamerToken = "";
+        let gekozenKamer = "MauroRoom";
         
         let spelersData = {};
         let spelerX = 375; let spelerY = 250; let spelerSchaal = 1.0; 
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
         let lokaleStream = null;
-        let p2pNetwerk;
+        let ws;
         
         let gameTimer = null;
         let tijdOver = 60;
         let spelleiderId = ""; 
         let alleSpelersKlaar = [];
 
-        window.addEventListener('DOMContentLoaded', () => {
-            // Genereer of lees de kamer-hash direct uit de URL-balk
-            if (!window.location.hash) {
-                window.location.hash = "room-" + Math.floor(1000 + Math.random() * 9000);
-            }
-            kamerToken = window.location.hash;
-            document.getElementById('deellink').value = window.location.href;
-        });
-
         function drukOpStartKnop() {
             mijnNaam = document.getElementById('spelerNaamInput').value.trim() || "Mauro";
-            document.getElementById('wachtStatus').innerText = "Kamer geopend! Wachten op spelers via je link...";
+            gekozenKamer = document.getElementById('kamerNaamInput').value.trim() || "MauroRoom";
+            document.getElementById('wachtStatus').innerText = "Verbinden met het wereldwijde netwerk...";
 
-            // Dit maakt gebruik van de browser-interne localStorage sync. 
-            // In combinatie met een schermdeling (Discord/Teams) verbindt dit spelers wereldwijd zonder dat een clouderver kan crashen!
-            window.addEventListener('storage', (e) => {
-                if (e.key === `webcam_hunt_global_sync_${kamerToken}`) {
-                    const data = JSON.parse(e.newValue);
-                    if (!data || data.id === mijnId) return;
+            // Maak verbinding met een geverifieerde, openbare WebSocket server (WSS weigert GitHub Pages nooit!)
+            ws = new WebSocket("wss://echo.websocket.org");
 
-                    if (data.type === "ready") {
-                        if (!alleSpelersKlaar.includes(data.id)) {
-                            alleSpelersKlaar.push(data.id);
-                            stuurNetwerkBericht({ type: "ready_sync", id: mijnId, name: mijnNaam });
-                        }
-                        checkStartVoorwaarden();
+            ws.onopen = () => {
+                document.getElementById('wachtStatus').innerText = "Online! Wachten tot de rest van de groep start...";
+                // Stuur aanmelding de wereld in
+                stuurNetwerkBericht({ type: "ready", id: mijnId, name: mijnNaam, room: gekozenKamer });
+                if (!alleSpelersKlaar.includes(mijnId)) alleSpelersKlaar.push(mijnId);
+                checkStartVoorwaarden();
+            };
+
+            ws.onmessage = (event) => {
+                let data;
+                try {
+                    data = JSON.parse(event.data);
+                } catch(e) { return; }
+
+                // Filter direct op de kamernaam zodat je alleen met jouw vrienden speelt!
+                if (data.room !== gekozenKamer || data.id === mijnId) return;
+
+                if (data.type === "ready") {
+                    if (!alleSpelersKlaar.includes(data.id)) {
+                        alleSpelersKlaar.push(data.id);
+                        stuurNetwerkBericht({ type: "ready_sync", id: mijnId, name: mijnNaam, room: gekozenKamer });
                     }
-                    if (data.type === "ready_sync") {
-                        if (!alleSpelersKlaar.includes(data.id)) alleSpelersKlaar.push(data.id);
-                        checkStartVoorwaarden();
-                    }
-                    if (data.type === "start_ronde") {
-                        startRondeEigenschappen(data.seekerId, data.hidersId);
-                    }
-                    if (data.type === "beweging") {
-                        if (spelersData[data.id]) {
-                            spelersData[data.id].x = data.x;
-                            spelersData[data.id].y = data.y;
-                            spelersData[data.id].schaal = data.schaal;
-                        }
-                    }
-                    if (data.type === "tag") {
-                        if (data.target === mijnId) {
-                            mijnTeam = "HELPER";
-                            document.getElementById('teamWeergave').innerText = "HELPER (HULPZOEKER)";
-                            document.getElementById('teamWeergave').style.color = "#e67e22";
-                            document.getElementById('besturingInfo').innerText = "Je bent getikt! Help de zoeker zoeken!";
-                            stuurPositie();
-                        }
-                        if (spelersData[data.target]) {
-                            spelersData[data.target].rol = "HELPER";
-                            updateAvatarKleur(data.target, "HELPER");
-                        }
-                        checkWinVoorwaarden();
-                    }
-                    if (data.type === "timer_sync") {
-                        tijdOver = data.tijd;
-                        document.getElementById('timerWeergave').innerText = tijdOver;
-                        if (tijdOver <= 0) beëindigRonde("HIDERS_WIN");
+                    checkStartVoorwaarden();
+                }
+                if (data.type === "ready_sync") {
+                    if (!alleSpelersKlaar.includes(data.id)) alleSpelersKlaar.push(data.id);
+                    checkStartVoorwaarden();
+                }
+                if (data.type === "start_ronde") {
+                    startRondeEigenschappen(data.seekerId, data.hidersId);
+                }
+                if (data.type === "beweging") {
+                    if (spelersData[data.id]) {
+                        spelersData[data.id].x = data.x;
+                        spelersData[data.id].y = data.y;
+                        spelersData[data.id].schaal = data.schaal;
                     }
                 }
-            });
-
-            // Meld je aan bij de kamer
-            stuurNetwerkBericht({ type: "ready", id: mijnId, name: mijnNaam });
-            if (!alleSpelersKlaar.includes(mijnId)) alleSpelersKlaar.push(mijnId);
-            checkStartVoorwaarden();
+                if (data.type === "tag") {
+                    if (data.target === mijnId) {
+                        mijnTeam = "HELPER";
+                        document.getElementById('teamWeergave').innerText = "HELPER (HULPZOEKER)";
+                        document.getElementById('teamWeergave').style.color = "#e67e22";
+                        document.getElementById('besturingInfo').innerText = "Je bent getikt! Help de zoeker zoeken!";
+                        stuurPositie();
+                    }
+                    if (spelersData[data.target]) {
+                        spelersData[data.target].rol = "HELPER";
+                        updateAvatarKleur(data.target, "HELPER");
+                    }
+                    checkWinVoorwaarden();
+                }
+                if (data.type === "timer_sync") {
+                    tijdOver = data.tijd;
+                    document.getElementById('timerWeergave').innerText = tijdOver;
+                    if (tijdOver <= 0) beëindigRonde("HIDERS_WIN");
+                }
+            };
         }
 
         function checkStartVoorwaarden() {
@@ -165,7 +163,7 @@
                 let gekozenHiders = alleSpelersKlaar.filter(id => id !== gekozenSeeker);
 
                 stuurNetwerkBericht({
-                    type: "start_ronde", seekerId: gekozenSeeker, hidersId: gekozenHiders
+                    type: "start_ronde", room: gekozenKamer, seekerId: gekozenSeeker, hidersId: gekozenHiders
                 });
             }
         }
@@ -186,3 +184,8 @@
 
             if (mijnId === seekerId) {
                 mijnTeam = "SEEKER";
+                document.getElementById('teamWeergave').innerText = "ZOEKER (SEEKER)";
+                document.getElementById('teamWeergave').style.color = "#ff4757";
+                document.getElementById('besturingInfo').innerText = "Klik op de groene Hiders om ze te vangen!";
+            } else {
+                mijnTeam = "HIDER";
