@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Webcam Hunt - Ultimate GitHub Multiplayer</title>
     
-    <!-- We laden PeerJS nu veilig lokaal in vanuit je eigen GitHub map -->
     <script src="peerjs.js"></script>
     
     <style>
@@ -37,7 +36,7 @@
     <!-- LOBBY MENU -->
     <div id="lobby">
         <h1>Webcam Hunt: GitHub Room</h1>
-        <p>Je unieke ID: <span id="mijnPeerId">Verbinden met netwerk...</span></p>
+        <p>Je unieke ID: <span id="mijnPeerId" style="color: #2ed573; font-weight: bold;">Verbinden met netwerk...</span></p>
         <p>Vul het ID in van een vriend die al online is (optioneel):</p>
         <input type="text" id="connectId" placeholder="ID van vriend..." style="padding: 10px; border-radius: 5px; border: none;"><br><br>
         
@@ -75,19 +74,29 @@
         let lokaleStream = null;
 
         window.addEventListener('DOMContentLoaded', () => {
-            
-            // Controleer of je eigen peerjs.js bestand goed is ingeladen
             if (typeof Peer === 'undefined') {
-                document.getElementById('mijnPeerId').innerText = "Fout: peerjs.js is niet gevonden in je GitHub map.";
-                document.getElementById('mijnPeerId').style.color = "#ff4757";
+                document.getElementById('mijnPeerId').innerText = "Fout: peerjs.js laadt niet.";
                 return;
             }
 
-            peer = new Peer(); 
+            // AANPASSING: We dwingen PeerJS om de stabiele, beveiligde cloud-poort te gebruiken
+            peer = new Peer({
+                host: '://peerjs.com',
+                port: 443,
+                path: '/',
+                secure: true
+            }); 
             
             peer.on('open', (id) => {
                 mijnId = id;
                 document.getElementById('mijnPeerId').innerText = id;
+            });
+
+            // Als de server een fout geeft, tonen we die nu direct netjes in de lobby
+            peer.on('error', (err) => {
+                console.error("PeerJS Fout:", err);
+                document.getElementById('mijnPeerId').innerText = "Netwerk bezet. Probeer opnieuw...";
+                document.getElementById('mijnPeerId').style.color = "#ff4757";
             });
 
             peer.on('connection', (conn) => {
@@ -215,13 +224,3 @@
         }
 
         function voegVideoToe(id, stream) {
-            if (document.getElementById(`video-${id}`)) return;
-
-            const video = document.createElement('video');
-            video.id = `video-${id}`;
-            video.className = "webcamStream";
-            video.srcObject = stream;
-            video.autoplay = true;
-            video.playsinline = true;
-            video.muted = true;
-
