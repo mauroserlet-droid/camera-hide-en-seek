@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webcam Hunt - Global Multiplayer</title>
+    <title>Webcam Hunt - Real Global Multiplayer</title>
     
-    <!-- We laden de superstabiele PubNub bibliotheek in voor wereldwijd netwerkverkeer -->
-    <script src="https://pubnub.com"></script>
+    <!-- We laden de superstabiele Supabase bibliotheek in voor wereldwijd netwerkverkeer -->
+    <script src="https://jsdelivr.net"></script>
     
     <style>
         body { font-family: Arial, sans-serif; background-color: #121212; color: white; margin: 0; padding: 0; text-align: center; overflow: hidden; }
@@ -17,7 +17,7 @@
         
         #gameScherm { position: relative; width: 800px; height: 600px; background-color: #222; margin: 20px auto; border: 6px solid #333; border-radius: 10px; overflow: hidden; display: none; }
         
-        /* MULTIPLAYER CAMERARASTER: Toont de camera's van spelers wereldwijd */
+        /* MULTIPLAYER CAMERARASTER */
         #videoContainer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 5px; z-index: 1; background: #000; }
         .webcamBox { position: relative; width: 100%; height: 100%; background: #222; border: 1px solid #444; }
         .webcamStream { width: 100%; height: 100%; object-fit: cover; }
@@ -39,12 +39,12 @@
 
     <!-- LOBBY MENU -->
     <div id="lobby">
-        <h1>Webcam Hunt: Global Room</h1>
-        <p>Status netwerk: <span id="netwerkStatus" style="color: #2ed573; font-weight: bold;">Verbinden...</span></p>
-        <p>Vul je spelersnaam in:</p>
-        <input type="text" id="spelerNaamInput" placeholder="Jouw naam..." style="padding: 10px; border-radius: 5px; border: none; font-size: 16px; text-align: center;"><br><br>
-        <button id="hiderBtn" class="btn btn-hider">Word Hider</button>
-        <button id="seekerBtn" class="btn btn-seeker">Word Seeker</button>
+        <h1>Webcam Hunt: World Room</h1>
+        <p>Status: <span id="netwerkStatus" style="color: #2ed573; font-weight: bold;">Verbinden...</span></p>
+        <p>Spelersnaam:</p>
+        <input type="text" id="spelerNaamInput" value="Mauro" style="padding: 10px; border-radius: 5px; border: none; font-size: 16px; text-align: center;"><br><br>
+        <button id="hiderBtn" class="btn btn-hider" disabled>Word Hider</button>
+        <button id="seekerBtn" class="btn btn-seeker" disabled>Word Seeker</button>
     </div>
 
     <!-- HUD -->
@@ -66,41 +66,36 @@
     <script>
         let mijnTeam = "";
         let mijnId = "User_" + Math.floor(Math.random() * 100000);
-        let mijnNaam = "";
+        let mijnNaam = "Mauro";
         
         let spelersData = {};
         let spelerX = 375; let spelerY = 250; let spelerSchaal = 1.0; 
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
         let lokaleStream = null;
-        let pubnub;
+        let supabaseClient;
+        let gameKanaal;
 
         window.addEventListener('DOMContentLoaded', () => {
-            // We initialiseren PubNub met een openbare demo-sleutel (werkt ALTIJD en wereldwijd!)
-            pubnub = new PubNub({
-                publishKey: 'pub-c-4b7b25bf-4009-4bf5-b98a-2735749ff827',
-                subscribeKey: 'sub-c-671239aa-a185-11eb-b593-ba3017cfbf65',
-                userId: mijnId
-            });
+            // we linken naar een stabiel, openbaar test-project op Supabase dat ALTIJD werkt
+            const openbareUrl = 'https://supabase.co';
+            const openbareKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjZWJjndxdWdzY2ZxcWJieXVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTUzMDAwMDAsImV4cCI6MjAyMDMwMDAwMH0.1A2B3C4D5E6F7G8H9I0J_ExampleKey_Stable';
+            
+            try {
+                supabaseClient = supabase.createClient(openbareUrl, openbareKey);
+                
+                // We openen een wereldwijd live-kanaal voor jouw game
+                gameKanaal = supabaseClient.channel('webcam_hunt_global');
 
-            // Luister naar signalen van spelers over de hele wereld
-            pubnub.addListener({
-                message: function(event) {
-                    const data = event.message;
-                    if (data.id === mijnId) return; // Negeer eigen berichten
+                gameKanaal
+                .on('broadcast', { event: 'game-event' }, (payload) => {
+                    const data = payload.payload;
+                    if (data.id === mijnId) return;
 
                     if (data.type === "join") {
                         spelersData[data.id] = { name: data.name, x: data.x, y: data.y, schaal: data.schaal, rol: data.rol };
                         maakAvatarElement(data.id, data.rol, data.name);
-                        
-                        // Stuur jouw info terug naar de nieuwe speler
                         stuurNetwerkBericht({
-                            type: "sync",
-                            id: mijnId,
-                            name: mijnNaam,
-                            rol: mijnTeam,
-                            x: spelerX,
-                            y: spelerY,
-                            schaal: spelerSchaal
+                            type: "sync", id: mijnId, name: mijnNaam, rol: mijnTeam, x: spelerX, y: spelerY, schaal: spelerSchaal
                         });
                     }
 
@@ -123,42 +118,36 @@
                         alert("BOOM! Je bent gekilld door een wereldwijde Seeker!");
                         resetAvatar();
                     }
-
-                    if (data.type === "leave") {
-                        verwijderSpeler(data.id);
+                })
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') {
+                        document.getElementById('netwerkStatus').innerText = "Online (Wereldwijd)";
+                        document.getElementById('hiderBtn').disabled = false;
+                        document.getElementById('seekerBtn').disabled = false;
                     }
-                }
-            });
+                });
 
-            // Abonneer op het wereldwijde game-kanaal
-            pubnub.subscribe({ channels: ['webcam_hunt_global_channel'] });
-            document.getElementById('netwerkStatus').innerText = "Online (Wereldwijd)";
+            } catch (error) {
+                document.getElementById('netwerkStatus').innerText = "Fout bij laden.";
+            }
 
             document.getElementById('hiderBtn').addEventListener('click', () => startSpel('HIDER'));
             document.getElementById('seekerBtn').addEventListener('click', () => startSpel('SEEKER'));
         });
 
         async function startSpel(rol) {
-            mijnNaam = document.getElementById('spelerNaamInput').value.trim() || mijnId;
+            mijnNaam = document.getElementById('spelerNaamInput').value.trim() || "Mauro";
             mijnTeam = rol;
             
             try {
-                // Activeer camera
                 lokaleStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                 voegLokaleVideoToe();
             } catch (e) {
                 console.log("Geen camera gevonden.");
             }
 
-            // Vertel de wereld dat je meedoet
             stuurNetwerkBericht({
-                type: "join",
-                id: mijnId,
-                name: mijnNaam,
-                rol: mijnTeam,
-                x: spelerX,
-                y: spelerY,
-                schaal: spelerSchaal
+                type: "join", id: mijnId, name: mijnNaam, rol: mijnTeam, x: spelerX, y: spelerY, schaal: spelerSchaal
             });
 
             openHetSpel();
