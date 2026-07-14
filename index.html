@@ -173,7 +173,7 @@
             document.getElementById("statusTekst").innerText = "Wachten op groep... (" + alleKlaar.length + " spelers klaar)";
             
             alleKlaar.sort();
-            if (alleKlaar.length >= 2 && mijnId === alleKlaar) {
+            if (alleKlaar.length >= 2 && mijnId === alleKlaar[0]) {
                 setTimeout(() => {
                     let s = alleKlaar[Math.floor(Math.random() * alleKlaar.length)];
                     let h = alleKlaar.filter(id => id !== s);
