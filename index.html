@@ -26,10 +26,9 @@
         .avatarBody { width: 50px; height: 80px; background-color: #3498db; border-radius: 10px; position: relative; }
         .avatarBody::before { content: ""; position: absolute; top: -25px; left: 10px; width: 30px; height: 30px; background-color: #ffdbac; border-radius: 50%; }
         
-        /* Team Kleuren per ronde */
-        .avatar.is-seeker .avatarBody { background-color: #e74c3c; } /* Zoeker = Rood */
-        .avatar.is-helper .avatarBody { background-color: #e67e22; } /* Helper / Gevangen = Oranje */
-        .avatar.is-hider .avatarBody { background-color: #2ed573; }  /* Verstopper = Groen */
+        .avatar.is-seeker .avatarBody { background-color: #e74c3c; } 
+        .avatar.is-helper .avatarBody { background-color: #e67e22; } 
+        .avatar.is-hider .avatarBody { background-color: #2ed573; }  
         
         .spelerNaam { position: absolute; top: -45px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 2px 6px; border-radius: 4px; font-size: 11px; white-space: nowrap; }
         #hud { background: rgba(0,0,0,0.8); padding: 15px; font-size: 18px; font-weight: bold; border-bottom: 3px solid #ff4757; display: none; }
@@ -38,23 +37,25 @@
 <body>
 
     <!-- GENERATOR & LOBBY MENU -->
-    <div id="generatorScherm" class="box">
+    <!-- We vangen de klik op via het formulier (onsubmit). Dit negeert fouten in de cache! -->
+    <form id="generatorScherm" class="box" onsubmit="event.preventDefault(); activeerDeSpellinkSectie(); return false;">
         <h1>Webcam Hunt 🚀</h1>
         <p>Jouw spelersnaam:</p>
-        <input type="text" id="spelerNaam" class="input-veld" value="Mauro">
+        <input type="text" id="spelerNaam" class="input-veld" value="Mauro" required>
 
         <div id="kamersSectie">
             <p>Verzin een unieke kamernaam:</p>
-            <input type="text" id="kamernaam" class="input-veld" value="MauroKamer">
-            <button class="btn" onclick="genereerGameLink()">GENEREER SPEL-LINK</button>
+            <input type="text" id="kamernaam" class="input-veld" value="MauroKamer" required>
+            <button type="submit" class="btn">GENEREER SPEL-LINK</button>
         </div>
 
         <div id="deellink-sectie">
             <strong style="color: #2ed573;">✓ Je game-link is geprogrammeerd!</strong>
             <textarea id="outputLink" readonly onclick="this.select()"></textarea>
-            <button class="btn" style="background-color: #2ed573;" onclick="drukKlaarKnop()">IK BEN KLAAR (START)</button>
+            <!-- Knop omgebouwd tot directe JavaScript-vrije actie -->
+            <button type="button" class="btn" style="background-color: #2ed573;" onclick="document.getElementById('generatorScherm').style.display='none'; openDeLobby();">IK BEN KLAAR (START)</button>
         </div>
-    </div>
+    </form>
 
     <!-- HUD TIJDENS HET SPEL -->
     <div id="hud">
@@ -96,7 +97,8 @@
             }
         });
 
-        function genereerGameLink() {
+        // Deze functie handelt de formulier-klik foutloos af
+        function activeerDeSpellinkSectie() {
             mijnNaam = document.getElementById('spelerNaam').value.trim() || "Mauro";
             kamer = document.getElementById('kamernaam').value.trim() || "MauroKamer";
             
@@ -106,13 +108,12 @@
             document.getElementById('deellink-sectie').style.display = "block";
         }
 
-        function drukKlaarKnop() {
+        function openDeLobby() {
             mijnNaam = document.getElementById('spelerNaam').value.trim() || "Mauro";
             
             kanaal = new BroadcastChannel("webcam_hunt_channel_" + kamer);
             setupNetwerkLuisteraar();
 
-            document.getElementById('generatorScherm').style.display = "none";
             document.getElementById('hud').style.display = "block";
             document.getElementById('kamerLabelTekst').innerText = kamer;
 
@@ -173,7 +174,7 @@
             document.getElementById("statusTekst").innerText = "Wachten op groep... (" + alleKlaar.length + " spelers klaar)";
             
             alleKlaar.sort();
-            if (alleKlaar.length >= 2 && mijnId === alleKlaar[0]) {
+            if (alleKlaar.length >= 2 && mijnId === alleKlaar) {
                 setTimeout(() => {
                     let s = alleKlaar[Math.floor(Math.random() * alleKlaar.length)];
                     let h = alleKlaar.filter(id => id !== s);
@@ -188,5 +189,3 @@
             document.getElementById("statusTekst").innerText = "Ronde gestart! Rol: " + mijnTeam;
             document.getElementById("gameScherm").style.display = "block";
             
-            alleKlaar.forEach(id => {
-                let rol = (id === s) ? "SEEKER" : "HIDER";
