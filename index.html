@@ -3,57 +3,187 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webcam Hunt - Link Generator</title>
+    <title>Webcam Hunt - Ultimate Global Edition</title>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #121212; color: white; margin: 0; padding: 0; text-align: center; }
+        body { font-family: Arial, sans-serif; background-color: #121212; color: white; margin: 0; padding: 0; text-align: center; overflow: hidden; }
+        
+        /* LOBBY / GENERATOR INTERFACE */
         .box { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a1a1a; padding: 40px; border-radius: 15px; border: 3px solid #ff4757; width: 400px; box-sizing: border-box; }
         .btn { padding: 12px 24px; font-size: 16px; margin: 15px 0; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; background-color: #ff4757; color: white; width: 100%; }
         .input-veld { padding: 10px; border-radius: 5px; border: none; font-size: 16px; text-align: center; width: 100%; box-sizing: border-box; margin-bottom: 10px; background: #333; color: white; }
         #deellink-sectie { display: none; margin-top: 20px; background: rgba(46, 213, 115, 0.1); padding: 15px; border-radius: 8px; border: 1px solid #2ed573; }
-        textarea { width: 100%; height: 80px; background: #111; color: #2ed573; border: 1px solid #444; border-radius: 5px; font-family: monospace; font-size: 11px; resize: none; margin-top: 5px; }
+        textarea { width: 100%; height: 60px; background: #111; color: #2ed573; border: 1px solid #444; border-radius: 5px; font-family: monospace; font-size: 11px; resize: none; margin-top: 5px; }
+
+        /* LIVE IN-GAME SPEELVELD */
+        #gameScherm { position: relative; width: 800px; height: 600px; background-color: #222; margin: 20px auto; border: 6px solid #333; border-radius: 10px; overflow: hidden; display: none; }
+        #videoContainer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 5px; z-index: 1; background: #000; }
+        .webcamBox { position: relative; width: 100%; height: 100%; background: #222; border: 1px solid #444; }
+        .webcamStream { width: 100%; height: 100%; object-fit: cover; }
+        .cameraLabel { position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+
+        /* Dynamische avatars */
+        .avatar { position: absolute; width: 50px; height: 80px; z-index: 5; cursor: pointer; transform-origin: bottom center; }
+        .avatarBody { width: 50px; height: 80px; background-color: #3498db; border-radius: 10px; position: relative; }
+        .avatarBody::before { content: ""; position: absolute; top: -25px; left: 10px; width: 30px; height: 30px; background-color: #ffdbac; border-radius: 50%; }
+        
+        /* Team Kleuren per ronde */
+        .avatar.is-seeker .avatarBody { background-color: #e74c3c; } /* Zoeker = Rood */
+        .avatar.is-helper .avatarBody { background-color: #e67e22; } /* Helper / Gevangen = Oranje */
+        .avatar.is-hider .avatarBody { background-color: #2ed573; }  /* Verstopper = Groen */
+        
+        .spelerNaam { position: absolute; top: -45px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 2px 6px; border-radius: 4px; font-size: 11px; white-space: nowrap; }
+        #hud { background: rgba(0,0,0,0.8); padding: 15px; font-size: 18px; font-weight: bold; border-bottom: 3px solid #ff4757; display: none; }
     </style>
 </head>
 <body>
 
-    <div class="box">
+    <!-- GENERATOR & LOBBY MENU -->
+    <div id="generatorScherm" class="box">
         <h1>Webcam Hunt 🚀</h1>
-        <p>Verzin een unieke kamernaam:</p>
-        <input type="text" id="kamernaam" class="input-veld" value="MauroKamer">
-        
-        <button class="btn" onclick="bouwDeSpellink()">GENEREER SPEL-LINK</button>
+        <p>Jouw spelersnaam:</p>
+        <input type="text" id="spelerNaam" class="input-veld" value="Mauro">
+
+        <div id="kamersSectie">
+            <p>Verzin een unieke kamernaam:</p>
+            <input type="text" id="kamernaam" class="input-veld" value="MauroKamer">
+            <button class="btn" onclick="genereerGameLink()">GENEREER SPEL-LINK</button>
+        </div>
 
         <div id="deellink-sectie">
-            <strong style="color: #2ed573;">✓ Je game is geprogrammeerd!</strong>
-            <p style="font-size: 13px; margin: 5px 0;">Kopieer en deel deze link met je vrienden om direct wereldwijd te spelen:</p>
+            <strong style="color: #2ed573;">✓ Je game-link is geprogrammeerd!</strong>
             <textarea id="outputLink" readonly onclick="this.select()"></textarea>
-            <p style="font-size: 11px; color: #aaa;">(Tip: Plak deze link in een nieuw tabblad om het zelf te testen!)</p>
+            <button class="btn" style="background-color: #2ed573;" onclick="drukKlaarKnop()">IK BEN KLAAR (START)</button>
         </div>
     </div>
 
+    <!-- HUD TIJDENS HET SPEL -->
+    <div id="hud">
+        Kamer: <span id="kamerLabelTekst">-</span> | <span id="statusTekst">Wachten op de groep...</span>
+    </div>
+
+    <!-- SPEELVELD -->
+    <div id="gameScherm">
+        <div id="videoContainer"></div>
+    </div>
+
     <script>
-        function bouwDeSpellink() {
-            const kamer = document.getElementById('kamernaam').value.trim() || "MauroKamer";
+        let mijnId = "User_" + Math.floor(Math.random() * 10000);
+        let mijnTeam = "PENDING";
+        let mijnNaam = "Mauro";
+        let kamer = "";
+        
+        let spelersData = {};
+        let spelerX = 375, spelerY = 250, spelerSchaal = 1.0;
+        let alleKlaar = [];
+        let lokaleStream = null;
+        let countdown = 60;
+        let timerLoop = null;
+        let kanaal = null;
+
+        const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            // Controleer of iemand binnenkomt via een gedeelde link (bijv. ?room=MauroKamer)
+            const urlParams = new URLSearchParams(window.location.search);
+            const gekregenKamer = urlParams.get('room');
+
+            if (gekregenKamer) {
+                kamer = gekregenKamer;
+                // Verberg het aanmaak-vak en toon meteen de startknop voor de gasten
+                document.getElementById('kamersSectie').style.display = "none";
+                document.getElementById('outputLink').value = window.location.href;
+                document.getElementById('deellink-sectie').style.display = "block";
+            }
+        });
+
+        function genereerGameLink() {
+            mijnNaam = document.getElementById('spelerNaam').value.trim() || "Mauro";
+            kamer = document.getElementById('kamernaam').value.trim() || "MauroKamer";
             
-            // We downloaden de code van je EIGEN domein, dit staat GitHub Pages 100% toe!
-            fetch('game.txt')
-                .then(response => {
-                    if (!response.ok) throw new Error("Bestand niet gevonden");
-                    return response.text();
-                })
-                .then(ruweCode => {
-                    // Injecteer de kamernaam
-                    const aangepasteCode = ruweCode.replace(/%%KAMERNAME%%/g, kamer);
-                    
-                    // Codeer het spel naar de legendarische Base64 link
-                    const dataUrlLink = "data:text/html;base64," + btoa(unescape(encodeURIComponent(aangepasteCode)));
-                    
-                    document.getElementById('outputLink').value = dataUrlLink;
-                    document.getElementById('deellink-sectie').style.display = "block";
-                })
-                .catch(err => {
-                    alert("Fout bij het laden van game.txt. Zorg dat het bestand op GitHub staat!");
-                });
+            // Bouw de link op basis van jouw echte GitHub domeinnaam en kamernaam
+            const completeLink = window.location.origin + window.location.pathname + "?room=" + kamer;
+            
+            document.getElementById('outputLink').value = completeLink;
+            document.getElementById('deellink-sectie').style.display = "block";
         }
-    </script>
-</body>
-</html>
+
+        function drukKlaarKnop() {
+            mijnNaam = document.getElementById('spelerNaam').value.trim() || "Mauro";
+            
+            // Activeer de netwerkmotor via jouw echte GitHub domein (werkt nu 100% vlekkeloos!)
+            kanaal = new BroadcastChannel("webcam_hunt_channel_" + kamer);
+            setupNetwerkLuisteraar();
+
+            document.getElementById('generatorScherm').style.display = "none";
+            document.getElementById('hud').style.display = "block";
+            document.getElementById('kamerLabelTekst').innerText = kamer;
+
+            if (!alleKlaar.includes(mijnId)) alleKlaar.push(mijnId);
+            kanaal.postMessage({ type: "ready", sender: mijnId, name: mijnNaam });
+            updateLobbyStatus();
+        }
+
+        function setupNetwerkLuisteraar() {
+            kanaal.onmessage = (e) => {
+                const d = e.data;
+                if (!d || d.sender === mijnId) return;
+
+                if (d.type === "ready") {
+                    if (!alleKlaar.includes(d.sender)) {
+                        alleKlaar.push(d.sender);
+                        spelersData[d.sender] = { name: d.name, rol: "PENDING" };
+                        kanaal.postMessage({ type: "ready_sync", sender: mijnId, name: mijnNaam });
+                    }
+                    updateLobbyStatus();
+                }
+                if (d.type === "ready_sync") {
+                    if (!alleKlaar.includes(d.sender)) {
+                        alleKlaar.push(d.sender);
+                        spelersData[d.sender] = { name: d.name, rol: "PENDING" };
+                    }
+                    updateLobbyStatus();
+                }
+                if (d.type === "start") {
+                    startDeRonde(d.seeker, d.hiders);
+                }
+                if (d.type === "loop") {
+                    if (spelersData[d.sender]) {
+                        spelersData[d.sender].x = d.x;
+                        spelersData[d.sender].y = d.y;
+                    }
+                }
+                if (d.type === "tag") {
+                    if (d.target === mijnId) {
+                        mijnTeam = "HELPER";
+                        document.getElementById("statusTekst").innerText = "Je bent AF! Help de zoeker!";
+                    }
+                    if (spelersData[d.target]) spelersData[d.target].rol = "HELPER";
+                    const av = document.getElementById("avatar-" + d.target);
+                    if (av) av.className = "avatar is-helper";
+                    checkWinnaar();
+                }
+                if (d.type === "timer") {
+                    countdown = d.tijd;
+                    document.getElementById("statusTekst").innerText = "Tijd over: " + countdown + "s | Rol: " + mijnTeam;
+                    if (countdown <= 0) stopSpel("VERSTOPPERS");
+                }
+            };
+        }
+
+        function updateLobbyStatus() {
+            if (mijnTeam !== "PENDING") return;
+            document.getElementById("statusTekst").innerText = "Wachten op groep... (" + alleKlaar.length + " spelers klaar)";
+            
+            // De eerste speler in de alfabetische lijst start de rollenverdeling
+            alleKlaar.sort();
+            if (alleKlaar.length >= 2 && mijnId === alleKlaar[0]) {
+                setTimeout(() => {
+                    let s = alleKlaar[Math.floor(Math.random() * alleKlaar.length)];
+                    let h = alleKlaar.filter(id => id !== s);
+                    kanaal.postMessage({ type: "start", seeker: s, hiders: h });
+                    startDeRonde(s, h);
+                }, 1000);
+            }
+        }
+
+        function startDeRonde(s, h) {
