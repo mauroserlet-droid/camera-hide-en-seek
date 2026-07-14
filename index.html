@@ -17,10 +17,11 @@
 
     <div class="box">
         <h1>Webcam Hunt 🚀</h1>
-        <p>Verzin een unieke kamernaam om je game-link te programmeren:</p>
+        <p>Verzin een unieke kamernaam:</p>
         <input type="text" id="kamernaam" class="input-veld" value="MauroKamer">
         
-        <button class="btn" id="knopGenereer">GENEREER SPEL-LINK</button>
+        <!-- Directe onclick actie die direct reageert zonder te wachten op de browser -->
+        <button class="btn" onclick="genereerDeSpellink()">GENEREER SPEL-LINK</button>
 
         <div id="deellink-sectie">
             <strong style="color: #2ed573;">✓ Je game is geprogrammeerd!</strong>
@@ -31,107 +32,102 @@
     </div>
 
     <script>
-        window.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('knopGenereer').addEventListener('click', () => {
-                genereerGeprogrammeerdeLink();
-            });
-        });
-
-        function genereerGeprogrammeerdeLink() {
+        function genereerDeSpellink() {
             const kamer = document.getElementById('kamernaam').value.trim() || "MauroKamer";
             
-            // We splitsen alle HTML tags op zodat de browser geen breuken of syntax-crashes kan veroorzaken
-            const sOpen = '<' + 'script' + '>';
-            const sSluit = '<' + '/' + 'script' + '>';
-
-            let gameCode = '<!DOCTYPE html>\n<html lang="nl">\n<head>\n<meta charset="UTF-8">\n<title>Webcam Hunt - Live Game</title>\n';
-            gameCode += '<style>\n';
-            gameCode += 'body { font-family: Arial, sans-serif; background-color: #121212; color: white; margin: 0; padding: 0; text-align: center; overflow: hidden; }\n';
-            gameCode += '#speelveld { position: relative; width: 800px; height: 600px; background-color: #222; margin: 20px auto; border: 6px solid #333; border-radius: 10px; overflow: hidden; }\n';
-            gameCode += '#videoContainer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 5px; z-index: 1; background: #000; }\n';
-            gameCode += '.webcamBox { position: relative; width: 100%; height: 100%; background: #222; border: 1px solid #444; }\n';
-            gameCode += '.webcamStream { width: 100%; height: 100%; object-fit: cover; }\n';
-            gameCode += '.cameraLabel { position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 2px 8px; border-radius: 4px; font-size: 12px; }\n';
-            gameCode += '.avatar { position: absolute; width: 50px; height: 80px; z-index: 5; cursor: pointer; transform-origin: bottom center; }\n';
-            gameCode += '.avatarBody { width: 50px; height: 80px; background-color: #3498db; border-radius: 10px; position: relative; }\n';
-            gameCode += '.avatarBody::before { content: ""; position: absolute; top: -25px; left: 10px; width: 30px; height: 30px; background-color: #ffdbac; border-radius: 50%; }\n';
-            gameCode += '.avatar.is-seeker .avatarBody { background-color: #e74c3c; }\n';
-            gameCode += '.avatar.is-helper .avatarBody { background-color: #e67e22; }\n';
-            gameCode += '.avatar.is-hider .avatarBody { background-color: #2ed573; }\n';
-            gameCode += '.spelerNaam { position: absolute; top: -45px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 2px 6px; border-radius: 4px; font-size: 11px; white-space: nowrap; }\n';
-            gameCode += '#hud { background: rgba(0,0,0,0.8); padding: 15px; font-size: 18px; font-weight: bold; border-bottom: 3px solid #ff4757; }\n';
-            gameCode += '.btn-ready { padding: 10px 20px; font-size: 16px; background: #ff4757; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px; font-weight: bold; }\n';
-            gameCode += '</style>\n</head>\n<body>\n';
+            // We bouwen de HTML van het spel op via losse, simpele tekstregels
+            let HTMLRegels = [];
+            HTMLRegels.push('<!DOCTYPE html>');
+            HTMLRegels.push('<html lang="nl">');
+            HTMLRegels.push('<head>');
+            HTMLRegels.push('<meta charset="UTF-8">');
+            HTMLRegels.push('<title>Webcam Hunt - Live Game</title>');
+            HTMLRegels.push('<style>');
+            HTMLRegels.push('body { font-family: Arial, sans-serif; background-color: #121212; color: white; margin: 0; padding: 0; text-align: center; overflow: hidden; }');
+            HTMLRegels.push('#speelveld { position: relative; width: 800px; height: 600px; background-color: #222; margin: 20px auto; border: 6px solid #333; border-radius: 10px; overflow: hidden; }');
+            HTMLRegels.push('#videoContainer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 5px; z-index: 1; background: #000; }');
+            HTMLRegels.push('.webcamBox { position: relative; width: 100%; height: 100%; background: #222; border: 1px solid #444; }');
+            HTMLRegels.push('.webcamStream { width: 100%; height: 100%; object-fit: cover; }');
+            HTMLRegels.push('.cameraLabel { position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 2px 8px; border-radius: 4px; font-size: 12px; }');
+            HTMLRegels.push('.avatar { position: absolute; width: 50px; height: 80px; z-index: 5; cursor: pointer; transform-origin: bottom center; }');
+            HTMLRegels.push('.avatarBody { width: 50px; height: 80px; background-color: #3498db; border-radius: 10px; position: relative; }');
+            HTMLRegels.push('.avatarBody::before { content: ""; position: absolute; top: -25px; left: 10px; width: 30px; height: 30px; background-color: #ffdbac; border-radius: 50%; }');
+            HTMLRegels.push('.avatar.is-seeker .avatarBody { background-color: #e74c3c; }');
+            HTMLRegels.push('.avatar.is-helper .avatarBody { background-color: #e67e22; }');
+            HTMLRegels.push('.avatar.is-hider .avatarBody { background-color: #2ed573; }');
+            HTMLRegels.push('.spelerNaam { position: absolute; top: -45px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 2px 6px; border-radius: 4px; font-size: 11px; white-space: nowrap; }');
+            HTMLRegels.push('#hud { background: rgba(0,0,0,0.8); padding: 15px; font-size: 18px; font-weight: bold; border-bottom: 3px solid #ff4757; }');
+            HTMLRegels.push('.btn-ready { padding: 10px 20px; font-size: 16px; background: #ff4757; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px; font-weight: bold; }');
+            HTMLRegels.push('</style>');
+            HTMLRegels.push('</head>');
+            HTMLRegels.push('<body>');
             
-            // We bouwen de HTML interface van het spel op met de gekozen kamernaam
-            gameCode += '<div id="hud">Kamer: ' + kamer + ' | <span id="statusTekst">Klik op de knop om klaar te staan!</span><br>';
-            gameCode += '<button id="readyKnop" class="btn-ready" onclick="ikBenKlaar()">IK BEN KLAAR (START)</button></div>\n';
-            gameCode += '<div id="speelveld"><div id="videoContainer"></div></div>\n';
+            HTMLRegels.push('<div id="hud">Kamer: ' + kamer + ' | <span id="statusTekst">Klik op de knop om klaar te staan!</span><br>');
+            HTMLRegels.push('<button id="readyKnop" class="btn-ready" onclick="ikBenKlaar()">IK BEN KLAAR (START)</button></div>');
+            HTMLRegels.push('<div id="speelveld"><div id="videoContainer"></div></div>');
             
-            // Voeg de interne JavaScript-netwerkmotor toe zonder runtime errors
-            gameCode += sOpen + '\n';
-            gameCode += 'let mijnId = "User_" + Math.floor(Math.random() * 10000);\n';
-            gameCode += 'let mijnTeam = "PENDING";\n';
-            gameCode += 'let spelersData = {};\n';
-            gameCode += 'let spelerX = 375, spelerY = 250, spelerSchaal = 1.0;\n';
-            gameCode += 'let alleKlaar = [];\n';
-            gameCode += 'let lokaleStream = null;\n';
-            gameCode += 'let countdown = 60;\n';
-            gameCode += 'let timerLoop = null;\n';
-            gameCode += 'const kanaal = new BroadcastChannel("bc_room_" + "' + kamer + '");\n';
+            // We voegen het script toe zonder dat de browser denkt dat de hoofd-tag sluit
+            HTMLRegels.push('<' + 'script' + '>');
+            HTMLRegels.push('let mijnId = "User_" + Math.floor(Math.random() * 10000);');
+            HTMLRegels.push('let mijnTeam = "PENDING";');
+            HTMLRegels.push('let spelersData = {};');
+            HTMLRegels.push('let spelerX = 375, spelerY = 250, spelerSchaal = 1.0;');
+            HTMLRegels.push('let alleKlaar = [];');
+            HTMLRegels.push('let lokaleStream = null;');
+            HTMLRegels.push('let countdown = 60;');
+            HTMLRegels.push('let timerLoop = null;');
+            HTMLRegels.push('const kanaal = new BroadcastChannel("bc_room_" + "' + kamer + '");');
             
-            gameCode += 'kanaal.onmessage = (e) => {\n';
-            gameCode += '  const d = e.data;\n';
-            gameCode += '  if (!d || d.sender === mijnId) return;\n';
-            gameCode += '  if (d.type === "ready") {\n';
-            gameCode += '    if (!alleKlaar.includes(d.sender)) {\n';
-            gameCode += '      alleKlaar.push(d.sender);\n';
-            gameCode += '      kanaal.postMessage({ type: "ready_sync", sender: mijnId });\n';
-            gameCode += '    }\n';
-            gameCode += '    updateLobbyStatus();\n';
-            gameCode += '  }\n';
-            gameCode += '  if (d.type === "ready_sync") {\n';
-            gameCode += '    if (!alleKlaar.includes(d.sender)) alleKlaar.push(d.sender);\n';
-            gameCode += '    updateLobbyStatus();\n';
-            gameCode += '  }\n';
-            gameCode += '  if (d.type === "start") {\n';
-            gameCode += '    startDeRonde(d.seeker, d.hiders);\n';
-            gameCode += '  }\n';
-            gameCode += '  if (d.type === "loop") {\n';
-            gameCode += '    if (spelersData[d.sender]) {\n';
-            gameCode += '      spelersData[d.sender].x = d.x; spelersData[d.sender].y = d.y; spelersData[d.sender].schaal = d.schaal;\n';
-            gameCode += '    }\n';
-            gameCode += '  }\n';
-            gameCode += '  if (d.type === "tag") {\n';
-            gameCode += '    if (d.target === mijnId) {\n';
-            gameCode += '      mijnTeam = "HELPER";\n';
-            gameCode += '      document.getElementById("statusTekst").innerText = "Je bent AF! Help de zoeker!";\n';
-            gameCode += '    }\n';
-            gameCode += '    if (spelersData[d.target]) spelersData[d.target].rol = "HELPER";\n';
-            gameCode += '    document.getElementById("avatar-" + d.target).className = "avatar is-helper";\n';
-            gameCode += '    checkWinnaar();\n';
-            gameCode += '  }\n';
-            gameCode += '  if (d.type === "timer") {\n';
-            gameCode += '    countdown = d.tijd;\n';
-            gameCode += '    document.getElementById("statusTekst").innerText = "Tijd over: " + countdown + "s | Rol: " + mijnTeam;\n';
-            gameCode += '    if (countdown <= 0) stopSpel("HIDERS");\n';
-            gameCode += '  }\n';
-            gameCode += '};\n';
+            HTMLRegels.push('kanaal.onmessage = (e) => {');
+            HTMLRegels.push('  const d = e.data;');
+            HTMLRegels.push('  if (!d || d.sender === mijnId) return;');
+            HTMLRegels.push('  if (d.type === "ready") {');
+            HTMLRegels.push('    if (!alleKlaar.includes(d.sender)) {');
+            HTMLRegels.push('      alleKlaar.push(d.sender);');
+            HTMLRegels.push('      kanaal.postMessage({ type: "ready_sync", sender: mijnId });');
+            HTMLRegels.push('    }');
+            HTMLRegels.push('    updateLobbyStatus();');
+            HTMLRegels.push('  }');
+            HTMLRegels.push('  if (d.type === "ready_sync") {');
+            HTMLRegels.push('    if (!alleKlaar.includes(d.sender)) alleKlaar.push(d.sender);');
+            HTMLRegels.push('    updateLobbyStatus();');
+            HTMLRegels.push('  }');
+            HTMLRegels.push('  if (d.type === "start") {');
+            HTMLRegels.push('    startDeRonde(d.seeker, d.hiders);');
+            HTMLRegels.push('  }');
+            HTMLRegels.push('  if (d.type === "loop") {');
+            HTMLRegels.push('    if (spelersData[d.sender]) {');
+            HTMLRegels.push('      spelersData[d.sender].x = d.x; spelersData[d.sender].y = d.y; spelersData[d.sender].schaal = d.schaal;');
+            HTMLRegels.push('    }');
+            HTMLRegels.push('  }');
+            HTMLRegels.push('  if (d.type === "tag") {');
+            HTMLRegels.push('    if (d.target === mijnId) {');
+            HTMLRegels.push('      mijnTeam = "HELPER";');
+            HTMLRegels.push('      document.getElementById("statusTekst").innerText = "Je bent AF! Help de zoeker!";');
+            HTMLRegels.push('    }');
+            HTMLRegels.push('    if (spelersData[d.target]) spelersData[d.target].rol = "HELPER";');
+            HTMLRegels.push('    document.getElementById("avatar-" + d.target).className = "avatar is-helper";');
+            HTMLRegels.push('    checkWinnaar();');
+            HTMLRegels.push('  }');
+            HTMLRegels.push('  if (d.type === "timer") {');
+            HTMLRegels.push('    countdown = d.tijd;');
+            HTMLRegels.push('    document.getElementById("statusTekst").innerText = "Tijd over: " + countdown + "s | Rol: " + mijnTeam;');
+            HTMLRegels.push('    if (countdown <= 0) stopSpel("HIDERS");');
+            HTMLRegels.push('  }');
+            HTMLRegels.push('};');
 
-            gameCode += 'function ikBenKlaar() {\n';
-            gameCode += '  document.getElementById("readyKnop").style.display = "none";\n';
-            gameCode += '  if (!alleKlaar.includes(mijnId)) alleKlaar.push(mijnId);\n';
-            gameCode += '  kanaal.postMessage({ type: "ready", sender: mijnId });\n';
-            gameCode += '  updateLobbyStatus();\n';
-            gameCode += '}\n';
+            HTMLRegels.push('function ikBenKlaar() {');
+            HTMLRegels.push('  document.getElementById("readyKnop").style.display = "none";');
+            HTMLRegels.push('  if (!alleKlaar.includes(mijnId)) alleKlaar.push(mijnId);');
+            HTMLRegels.push('  kanaal.postMessage({ type: "ready", sender: mijnId });');
+            HTMLRegels.push('  updateLobbyStatus();');
+            HTMLRegels.push('}');
 
-            gameCode += 'function updateLobbyStatus() {\n';
-            gameCode += '  if (mijnTeam !== "PENDING") return;\n';
-            gameCode += '  document.getElementById("statusTekst").innerText = "Wachten op groep... (" + alleKlaar.length + " spelers klaar)";\n';
-            gameCode += '  alleKlaar.sort();\n';
-            gameCode += '  if (alleKlaar.length >= 2 && mijnId === alleKlaar[0]) {\n';
-            gameCode += '    setTimeout(() => {\n';
-            gameCode += '      let s = alleKlaar[Math.floor(Math.random() * alleKlaar.length)];\n';
-            gameCode += '      let h = alleKlaar.filter(id => id !== s);\n';
-            gameCode += '      kanaal.postMessage({ type: "start", seeker: s, hiders: h });\n';
-            gameCode += '      startDeRonde(s, h);\n';
+            HTMLRegels.push('function updateLobbyStatus() {');
+            HTMLRegels.push('  if (mijnTeam !== "PENDING") return;');
+            HTMLRegels.push('  document.getElementById("statusTekst").innerText = "Wachten... (" + alleKlaar.length + " spelers klaar)";');
+            HTMLRegels.push('  alleKlaar.sort();');
+            HTMLRegels.push('  if (alleKlaar.length >= 2 && mijnId === alleKlaar[0]) {');
+            HTMLRegels.push('    setTimeout(() => {');
+            HTMLRegels.push('      let s = alleKlaar[Math.floor(Math.random() * alleKlaar.length)];');
+            HTMLRegels.push('      let h = alleKlaar.filter(id => id !== s);');
