@@ -13,7 +13,7 @@
         
         #gameScherm { position: relative; width: 800px; height: 600px; background-color: #222; margin: 20px auto; border: 6px solid #333; border-radius: 10px; overflow: hidden; display: none; }
         
-        /* MULTIPLAYER CAMERARASTER */
+        /* MULTIPLAYER CAMERARASTER: Verdeelt de achtergrond voor alle webcams */
         #videoContainer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 5px; z-index: 1; background: #000; }
         .webcamBox { position: relative; width: 100%; height: 100%; background: #222; border: 1px solid #444; }
         .webcamStream { width: 100%; height: 100%; object-fit: cover; }
@@ -29,9 +29,6 @@
         #zoomControls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 8; display: none; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 10px; }
         .btn-zoom { background-color: #3498db; color: white; border: none; padding: 10px 20px; margin: 0 5px; border-radius: 5px; cursor: pointer;}
         #hud { background: rgba(0,0,0,0.8); padding: 10px; display: none; }
-        
-        #inviteLinkBox { display: none; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 5px; margin-top: 15px; font-size: 13px; }
-        #linkTekst { width: 100%; padding: 5px; background: #333; color: #2ed573; border: none; font-family: monospace; text-align: center; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -42,14 +39,8 @@
         <p>Spelersnaam:</p>
         <input type="text" id="spelerNaamInput" value="Mauro" style="padding: 10px; border-radius: 5px; border: none; font-size: 16px; text-align: center; width: 80%;"><br><br>
         
-        <!-- Direct werkende knoppen met inline functies die NOOIT kunnen crashen -->
         <button class="btn btn-hider" onclick="selecteerRol('HIDER')">Word Hider</button>
         <button class="btn btn-seeker" onclick="selecteerRol('SEEKER')">Word Seeker</button>
-
-        <div id="inviteLinkBox">
-            <p>Stuur deze link naar je vrienden om samen te spelen:</p>
-            <input type="text" id="linkTekst" readonly onclick="this.select()">
-        </div>
     </div>
 
     <!-- HUD -->
@@ -68,7 +59,6 @@
         <button class="btn-zoom" onclick="zoomUit()">Verder Weg (-)</button>
     </div>
 
-    <!-- HIER STAAT JOUW OUDE VERTROUWDE NETWERKMOTOR DIE DIRECT INLAAD -->
     <script>
         let mijnTeam = "";
         let mijnId = "User_" + Math.floor(Math.random() * 10000);
@@ -79,11 +69,10 @@
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
         let lokaleStream = null;
 
-        // Dit is de ingebouwde browser-netwerkmotor uit jouw allereerste werkende code!
+        // De ingebouwde browser-netwerkmotor uit jouw allereerste werkende code
         const netwerkKanaal = new BroadcastChannel('webcam_hunt_channel');
 
         window.addEventListener('DOMContentLoaded', () => {
-            // Luister direct naar andere tabbladen/computers via het kanaal
             netwerkKanaal.onmessage = (event) => {
                 const data = event.data;
                 if (data.id === mijnId) return;
@@ -92,7 +81,6 @@
                     spelersData[data.id] = { name: data.name, x: data.x, y: data.y, schaal: data.schaal, rol: data.rol };
                     maakAvatarElement(data.id, data.rol, data.name);
                     
-                    // Stuur direct jouw positie terug naar de nieuwe speler
                     netwerkKanaal.postMessage({
                         type: "sync", id: mijnId, name: mijnNaam, rol: mijnTeam, x: spelerX, y: spelerY, schaal: spelerSchaal
                     });
@@ -134,7 +122,7 @@
             mijnTeam = rol;
             mijnNaam = document.getElementById('spelerNaamInput').value.trim() || "Mauro";
             
-            // Open onmiddellijk het spel zonder te wachten op de camera!
+            // Schakel direct over naar het speelscherm
             document.getElementById('lobby').style.display = "none";
             document.getElementById('gameScherm').style.display = "block";
             document.getElementById('hud').style.display = "block";
@@ -151,17 +139,16 @@
                 document.getElementById('besturingInfo').innerText = "Klik op een Hider avatar om ze te killen!";
             }
 
-            // Pas NU in de achtergrond de camera starten, zodat het spel al draait
+            // Start de camera pas ná de schermwissel zodat de knop nooit blokkeert
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 navigator.mediaDevices.getUserMedia({ video: true, audio: false })
                 .then(stream => {
                     lokaleStream = stream;
                     voegVideoToe(mijnId, lokaleStream, mijnNaam);
                 })
-                .catch(() => { console.log("Geen camera gevonden of toestemming geweigerd."); });
+                .catch(() => { console.log("Geen camera gevonden."); });
             }
 
-            // Meld aan de rest van de spelers dat je meedoet
             netwerkKanaal.postMessage({
                 type: "join", id: mijnId, name: mijnNaam, rol: mijnTeam, x: spelerX, y: spelerY, schaal: spelerSchaal
             });
@@ -191,3 +178,29 @@
             av.onclick = (event) => {
                 if (mijnTeam === 'SEEKER' && rol === 'HIDER') {
                     event.stopPropagation();
+                    alert("Geweldig! Hider gekilld!");
+                    netwerkKanaal.postMessage({ type: "kill", target: id });
+                }
+            };
+
+            document.getElementById('gameScherm').appendChild(av);
+        }
+
+        function voegVideoToe(id, stream, labelTekst) {
+            if (document.getElementById(`video-${id}`)) return;
+
+            const box = document.createElement('div');
+            box.className = "webcamBox";
+            box.id = `video-${id}`;
+
+            const video = document.createElement('video');
+            video.className = "webcamStream";
+            video.srcObject = stream;
+            video.autoplay = true;
+            video.playsinline = true;
+            video.muted = true;
+
+            const label = document.createElement('div');
+            label.className = "cameraLabel";
+            label.innerText = labelTekst;
+
