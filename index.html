@@ -34,24 +34,24 @@
         function bouwDeSpellink() {
             const kamer = document.getElementById('kamernaam').value.trim() || "MauroKamer";
             
-            // We halen de game-code op uit een extern, veilig text-bestand om browser-crashes te voorkomen
-            fetch('https://pastebin.com')
-                .then(response => response.text())
+            // We downloaden de code van je EIGEN domein, dit staat GitHub Pages 100% toe!
+            fetch('game.txt')
+                .then(response => {
+                    if (!response.ok) throw new Error("Bestand niet gevonden");
+                    return response.text();
+                })
                 .then(ruweCode => {
-                    // We injecteren jouw gekozen kamernaam in de game-code
+                    // Injecteer de kamernaam
                     const aangepasteCode = ruweCode.replace(/%%KAMERNAME%%/g, kamer);
                     
-                    // Veilig omzetten naar de legendarische Base64 link
+                    // Codeer het spel naar de legendarische Base64 link
                     const dataUrlLink = "data:text/html;base64," + btoa(unescape(encodeURIComponent(aangepasteCode)));
                     
                     document.getElementById('outputLink').value = dataUrlLink;
                     document.getElementById('deellink-sectie').style.display = "block";
                 })
                 .catch(err => {
-                    // Back-up plan: als internet traag is, maken we een directe link naar je eigen GitHub-structuur
-                    const backupLink = window.location.href.split('?')[0] + "?room=" + kamer;
-                    document.getElementById('outputLink').value = backupLink;
-                    document.getElementById('deellink-sectie').style.display = "block";
+                    alert("Fout bij het laden van game.txt. Zorg dat het bestand op GitHub staat!");
                 });
         }
     </script>
