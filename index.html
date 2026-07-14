@@ -69,7 +69,7 @@
         let mijnId = "";
         let peer;
         let verbindingen = {};
-        let spelers Data = {}; // Slaat posities van alle spelers op
+        let spelersData = {}; // Gecorrigeerd: spatie weggehaald!
         let actieveCameraIndex = 0;
 
         // Lokale speler eigenschappen
@@ -86,12 +86,12 @@
                 document.getElementById('mijnPeerId').innerText = id;
             });
 
-            // Luister naar inkomende dataverbindingen (chat/posities)
+            // Luister naar inkomende dataverbindingen
             peer.on('connection', (conn) => {
                 registreerVerbindingEvents(conn);
             });
 
-            // Luister naar inkomende videostreams (camera's)
+            // Luister naar inkomende videostreams
             peer.on('call', (call) => {
                 call.answer(lokaleStream); // Stuur je eigen camera terug
                 call.on('stream', (remoteStream) => {
@@ -123,11 +123,11 @@
         function verbindMetSpeler(doelId) {
             if (verbindingen[doelId]) return;
 
-            // 1. Start dataverbinding (voor lopen/kils)
+            // 1. Start dataverbinding
             let conn = peer.connect(doelId);
             registreerVerbindingEvents(conn);
 
-            // 2. Start videoverbinding (voor camera)
+            // 2. Start videoverbinding
             if (lokaleStream) {
                 let call = peer.call(doelId, lokaleStream);
                 call.on('stream', (remoteStream) => {
@@ -140,7 +140,6 @@
             verbindingen[conn.peer] = conn;
             
             conn.on('open', () => {
-                // Stuur direct je huidige rol en positie naar de nieuwe speler
                 conn.send({ type: "join", rol: mijnTeam, x: spelerX, y: spelerY, schaal: spelerSchaal });
             });
 
@@ -148,7 +147,6 @@
                 if (data.type === "join") {
                     spelersData[conn.peer] = { x: data.x, y: data.y, schaal: data.schaal, rol: data.rol };
                     maakAvatarElement(conn.peer, data.rol);
-                    // Verbind direct terug zodat het netwerk tweerichtingsverkeer wordt
                     verbindMetSpeler(conn.peer);
                 }
                 if (data.type === "beweging") {
@@ -175,7 +173,6 @@
             document.getElementById('hud').style.display = "block";
             document.getElementById('teamWeergave').innerText = mijnTeam;
 
-            // Maak de eigen avatar aan
             maakAvatarElement(mijnId, mijnTeam);
 
             if (mijnTeam === 'HIDER') {
@@ -205,6 +202,15 @@
             body.className = "avatarBody";
             av.appendChild(body);
 
-            // Als een seeker op deze specifieke avatar klikt
             av.onclick = (event) => {
                 if (mijnTeam === 'SEEKER' && rol === 'HIDER') {
+                    event.stopPropagation();
+                    alert("Hider gekilld!");
+                    stuurNaarAllen({ type: "kill", target: id });
+                }
+            };
+
+            document.getElementById('gameScherm').appendChild(av);
+        }
+
+        function voegVideoToe(id, stream) {
