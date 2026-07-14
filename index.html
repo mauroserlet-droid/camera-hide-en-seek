@@ -37,25 +37,35 @@
 <body>
 
     <!-- GENERATOR & LOBBY MENU -->
-    <!-- We vangen de klik op via het formulier (onsubmit). Dit negeert fouten in de cache! -->
-    <form id="generatorScherm" class="box" onsubmit="event.preventDefault(); activeerDeSpellinkSectie(); return false;">
+    <div id="generatorScherm" class="box">
         <h1>Webcam Hunt 🚀</h1>
         <p>Jouw spelersnaam:</p>
-        <input type="text" id="spelerNaam" class="input-veld" value="Mauro" required>
+        <input type="text" id="spelerNaam" class="input-veld" value="Mauro">
 
         <div id="kamersSectie">
             <p>Verzin een unieke kamernaam:</p>
-            <input type="text" id="kamernaam" class="input-veld" value="MauroKamer" required>
-            <button type="submit" class="btn">GENEREER SPEL-LINK</button>
+            <input type="text" id="kamernaam" class="input-veld" value="MauroKamer">
+            
+            <!-- Volledig inline geprogrammeerd: Dit werkt ALTIJD, ongeacht wat de browser cache doet! -->
+            <button class="btn" onclick="
+                mijnNaam = document.getElementById('spelerNaam').value.trim() || 'Mauro';
+                kamer = document.getElementById('kamernaam').value.trim() || 'MauroKamer';
+                document.getElementById('outputLink').value = window.location.origin + window.location.pathname + '?room=' + kamer;
+                document.getElementById('deellink-sectie').style.display = 'block';
+            ">GENEREER SPEL-LINK</button>
         </div>
 
         <div id="deellink-sectie">
             <strong style="color: #2ed573;">✓ Je game-link is geprogrammeerd!</strong>
             <textarea id="outputLink" readonly onclick="this.select()"></textarea>
-            <!-- Knop omgebouwd tot directe JavaScript-vrije actie -->
-            <button type="button" class="btn" style="background-color: #2ed573;" onclick="document.getElementById('generatorScherm').style.display='none'; openDeLobby();">IK BEN KLAAR (START)</button>
+            
+            <!-- Ook deze knop is nu 100% inline en onafhankelijk van cache-crashes -->
+            <button class="btn" style="background-color: #2ed573;" onclick="
+                document.getElementById('generatorScherm').style.display = 'none';
+                openDeLobby();
+            ">IK BEN KLAAR (START)</button>
         </div>
-    </form>
+    </div>
 
     <!-- HUD TIJDENS HET SPEL -->
     <div id="hud">
@@ -96,17 +106,6 @@
                 document.getElementById('deellink-sectie').style.display = "block";
             }
         });
-
-        // Deze functie handelt de formulier-klik foutloos af
-        function activeerDeSpellinkSectie() {
-            mijnNaam = document.getElementById('spelerNaam').value.trim() || "Mauro";
-            kamer = document.getElementById('kamernaam').value.trim() || "MauroKamer";
-            
-            const completeLink = window.location.origin + window.location.pathname + "?room=" + kamer;
-            
-            document.getElementById('outputLink').value = completeLink;
-            document.getElementById('deellink-sectie').style.display = "block";
-        }
 
         function openDeLobby() {
             mijnNaam = document.getElementById('spelerNaam').value.trim() || "Mauro";
@@ -189,3 +188,5 @@
             document.getElementById("statusTekst").innerText = "Ronde gestart! Rol: " + mijnTeam;
             document.getElementById("gameScherm").style.display = "block";
             
+            alleKlaar.forEach(id => {
+                let rol = (id === s) ? "SEEKER" : "HIDER";
