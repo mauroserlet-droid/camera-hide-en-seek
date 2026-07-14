@@ -3,21 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webcam Hunt - Real Global Multiplayer</title>
-    
-    <!-- We laden de Bugout netwerk-engine in voor wereldwijd peer-to-peer verkeer -->
-    <script src="https://jsdelivr.net"></script>
-    
+    <title>Webcam Hunt - Global Multiplayer Fix</title>
     <style>
         body { font-family: Arial, sans-serif; background-color: #121212; color: white; margin: 0; padding: 0; text-align: center; overflow: hidden; }
-        #lobby { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 20, 20, 0.95); padding: 40px; border-radius: 15px; border: 3px solid #ff4757; z-index: 10; width: 400px; }
+        #lobby { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 20, 20, 0.95); padding: 30px; border-radius: 15px; border: 3px solid #ff4757; z-index: 10; width: 420px; box-sizing: border-box; }
         .btn { padding: 12px 24px; font-size: 16px; margin: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
         .btn-hider { background-color: #2ed573; color: white; }
         .btn-seeker { background-color: #ff4757; color: white; }
         
         #gameScherm { position: relative; width: 800px; height: 600px; background-color: #222; margin: 20px auto; border: 6px solid #333; border-radius: 10px; overflow: hidden; display: none; }
         
-        /* MULTIPLAYER CAMERARASTER: Verdeelt het scherm automatisch voor alle spelers op de wereld */
+        /* MULTIPLAYER CAMERARASTER: Verdeelt het scherm voor alle spelers ter wereld */
         #videoContainer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 5px; z-index: 1; background: #000; }
         .webcamBox { position: relative; width: 100%; height: 100%; background: #222; border: 1px solid #444; }
         .webcamStream { width: 100%; height: 100%; object-fit: cover; }
@@ -33,19 +29,38 @@
         #zoomControls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 8; display: none; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 10px; }
         .btn-zoom { background-color: #3498db; color: white; border: none; padding: 10px 20px; margin: 0 5px; border-radius: 5px; cursor: pointer;}
         #hud { background: rgba(0,0,0,0.8); padding: 10px; display: none; }
+        
+        textarea { width: 100%; height: 50px; background: #333; color: white; border: 1px solid #555; border-radius: 5px; margin-top: 5px; resize: none; font-size: 10px; }
+        .stap { background: rgba(255,255,255,0.05); padding: 8px; margin: 8px 0; border-radius: 8px; text-align: left; font-size: 12px; }
     </style>
 </head>
 <body>
 
     <!-- LOBBY MENU -->
     <div id="lobby">
-        <h1>Webcam Hunt: World Room</h1>
-        <p>Netwerkstatus: <span id="netwerkStatus" style="color: #2ed573; font-weight: bold;">Verbinden met wereld...</span></p>
-        <p>Spelersnaam:</p>
-        <input type="text" id="spelerNaamInput" value="Mauro" style="padding: 10px; border-radius: 5px; border: none; font-size: 16px; text-align: center; width: 80%;"><br><br>
+        <h1>Webcam Hunt</h1>
+        <p>Spelersnaam: <input type="text" id="spelerNaamInput" value="Mauro" style="padding: 5px; border-radius: 5px; border: none; width: 120px; text-align: center;"></p>
         
-        <button id="hiderBtn" class="btn btn-hider" onclick="selecteerRol('HIDER')" disabled>Word Hider</button>
-        <button id="seekerBtn" class="btn btn-seeker" onclick="selecteerRol('SEEKER')" disabled>Word Seeker</button>
+        <div class="stap">
+            <strong>Stap 1:</strong> Kies je rol om de lobby te starten.
+            <center>
+                <button class="btn btn-hider" onclick="initLobby('HIDER')">Word Hider</button>
+                <button class="btn btn-seeker" onclick="initLobby('SEEKER')">Word Seeker</button>
+            </center>
+        </div>
+
+        <div id="connectieBlok" style="display:none;">
+            <div class="stap">
+                <strong>Stap 2:</strong> Deel deze code met de andere computer:
+                <textarea id="lokaleCode" readonly onclick="this.select()"></textarea>
+            </div>
+
+            <div class="stap">
+                <strong>Stap 3:</strong> Plak de code van de andere computer hier:
+                <textarea id="externeCode" placeholder="Plak hier de ontvangen code..."></textarea>
+                <center><button class="btn" style="background:#3498db; color:white; margin-top:5px; padding: 8px 16px;" onclick="verbindenMetCode()">Verbind Computers</button></center>
+            </div>
+        </div>
     </div>
 
     <!-- HUD -->
@@ -73,121 +88,102 @@
         let spelerX = 375; let spelerY = 250; let spelerSchaal = 1.0; 
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
         let lokaleStream = null;
-        let bgt;
 
-        window.addEventListener('DOMContentLoaded', () => {
-            // We maken een unieke wereldwijde kamer aan op het Bugout netwerk
-            bgt = new Bugout("webcam_hunt_global_github_room");
+        let peerConnection;
+        let dataChannel;
+        const rtcConfig = { iceServers: [{ urls: 'stun:://google.com' }] };
 
-            bgt.on("seen", (address) => {
-                // Zodra we een andere computer ontdekken, sturen we direct onze data
-                stuurNetwerkBericht({
-                    type: "join", id: mijnId, name: mijnNaam, rol: mijnTeam, x: spelerX, y: spelerY, schaal: spelerSchaal
-                });
-            });
-
-            bgt.on("message", (address, data) => {
-                if (data.id === mijnId) return;
-
-                if (data.type === "join") {
-                    spelersData[data.id] = { name: data.name, x: data.x, y: data.y, schaal: data.schaal, rol: data.rol };
-                    maakAvatarElement(data.id, data.rol, data.name);
-                    
-                    stuurNetwerkBericht({
-                        type: "sync", id: mijnId, name: mijnNaam, rol: mijnTeam, x: spelerX, y: spelerY, schaal: spelerSchaal
-                    });
-                }
-
-                if (data.type === "sync") {
-                    if (!spelersData[data.id]) {
-                        spelersData[data.id] = { name: data.name, x: data.x, y: data.y, schaal: data.schaal, rol: data.rol };
-                        maakAvatarElement(data.id, data.rol, data.name);
-                    }
-                }
-
-                if (data.type === "beweging") {
-                    if (spelersData[data.id]) {
-                        spelersData[data.id].x = data.x;
-                        spelersData[data.id].y = data.y;
-                        spelersData[data.id].schaal = data.schaal;
-                    }
-                }
-
-                if (data.type === "kill" && data.target === mijnId) {
-                    alert("BOOM! Je bent gekilld door een wereldwijde Seeker!");
-                    resetAvatar();
-                }
-
-                if (data.type === "leave") {
-                    const av = document.getElementById(`avatar-${data.id}`);
-                    if (av) av.remove();
-                    delete spelersData[data.id];
-                }
-            });
-
-            // Als de verbinding met het wereldwijde netwerk klaar is, activeren we de knoppen
-            document.getElementById('netwerkStatus').innerText = "Online (Wereldwijd)";
-            document.getElementById('netwerkStatus').style.color = "#2ed573";
-            document.getElementById('hiderBtn').disabled = false;
-            document.getElementById('seekerBtn').disabled = false;
-        });
-
-        function selecteerRol(rol) {
+        function initLobby(rol) {
             mijnTeam = rol;
             mijnNaam = document.getElementById('spelerNaamInput').value.trim() || "Mauro";
             
-            document.getElementById('lobby').style.display = "none";
-            document.getElementById('gameScherm').style.display = "block";
-            document.getElementById('hud').style.display = "block";
-            document.getElementById('teamWeergave').innerText = mijnTeam;
+            // Toon direct de stappen (kan nooit blokkeren!)
+            document.getElementById('connectieBlok').style.display = "block";
 
-            maakAvatarElement(mijnId, mijnTeam, mijnNaam + " (Jij)");
-
-            if (mijnTeam === 'HIDER') {
-                document.getElementById('teamWeergave').style.color = "#2ed573";
-                document.getElementById('zoomControls').style.display = "block";
-                document.getElementById('besturingInfo').innerText = "Gebruik de pijltjestoetsen om te lopen.";
-            } else {
-                document.getElementById('teamWeergave').style.color = "#ff4757";
-                document.getElementById('besturingInfo').innerText = "Klik op een Hider avatar om ze te killen!";
-            }
-
-            // Start camera veilig op de achtergrund
+            // Start de WebRTC peer-to-peer verbinding op
+            peerConnection = new RTCPeerConnection(rtcConfig);
+            
+            // Cameratoegang aanvragen op de achtergrond
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 navigator.mediaDevices.getUserMedia({ video: true, audio: false })
                 .then(stream => {
                     lokaleStream = stream;
-                    voegVideoToe(mijnId, lokaleStream, mijnNaam);
+                    voegVideoToe(mijnId, lokaleStream, mijnNaam + " (Jij)");
+                    lokaleStream.getTracks().forEach(track => peerConnection.addTrack(track, lokaleStream));
                 })
-                .catch(() => { console.log("Geen camera gevonden."); });
+                .catch(e => console.log("Camera niet gevonden of geweigerd. Spel start zonder video."));
             }
 
-            stuurNetwerkBericht({
-                type: "join", id: mijnId, name: mijnNaam, rol: mijnTeam, x: spelerX, y: spelerY, schaal: spelerSchaal
-            });
+            // Datakanaal aanmaken voor lopen en kils
+            dataChannel = peerConnection.createDataChannel("gameChannel");
+            luisterNaarDatachannel(dataChannel);
 
-            window.addEventListener('keydown', (e) => { if (e.key in keys) { e.preventDefault(); keys[e.key] = true; } });
-            window.addEventListener('keyup', (e) => { if (e.key in keys) { keys[e.key] = false; } });
+            peerConnection.ontrack = (event) => {
+                voegVideoToe("Ander", event.streams[0], "Vriend(in)");
+            };
 
-            setInterval(gameLoop, 1000 / 60);
+            peerConnection.onicecandidate = (e) => {
+                if (!e.candidate) {
+                    const setupData = { sdp: peerConnection.localDescription, name: mijnNaam, rol: mijnTeam };
+                    document.getElementById('lokaleCode').value = btoa(JSON.stringify(setupData));
+                }
+            };
+
+            peerConnection.createOffer()
+            .then(offer => peerConnection.setLocalDescription(offer))
+            .catch(err => console.log(err));
         }
 
-        function maakAvatarElement(id, rol, naam) {
-            if (document.getElementById(`avatar-${id}`)) return;
+        function verbindenMetCode() {
+            const invoer = document.getElementById('externeCode').value.trim();
+            if(!invoer) return alert("Plak eerst de code!");
 
-            const av = document.createElement('div');
-            av.id = `avatar-${id}`;
-            av.className = `avatar ${rol === 'SEEKER' ? 'is-seeker' : 'is-hider'}`;
+            try {
+                const partnerData = JSON.parse(atob(invoer));
+                
+                if (partnerData.sdp.type === "offer") {
+                    peerConnection.setRemoteDescription(new RTCSessionDescription(partnerData.sdp))
+                    .then(() => peerConnection.createAnswer())
+                    .then(answer => peerConnection.setLocalDescription(answer))
+                    .then(() => {
+                        const antwoordSetup = { sdp: peerConnection.localDescription, name: mijnNaam, rol: mijnTeam };
+                        document.getElementById('lokaleCode').value = btoa(JSON.stringify(antwoordSetup));
+                        alert("Stap 2 is nu vernieuwd! Kopieer die code en stuur hem terug naar de andere computer!");
+                    });
+                } else if (partnerData.sdp.type === "answer") {
+                    peerConnection.setRemoteDescription(new RTCSessionDescription(partnerData.sdp));
+                }
+
+                spelersData["Ander"] = { name: partnerData.name, x: 375, y: 250, schaal: 1.0, rol: partnerData.rol };
+                maakAvatarElement("Ander", partnerData.rol, partnerData.name);
+            } catch (e) {
+                alert("Foutieve of incomplete code geplakt!");
+            }
+        }
+
+        function luisterNaarDatachannel(channel) {
+            channel.onopen = () => openHetSpeelveld();
+            channel.onmessage = (e) => {
+                const msg = JSON.parse(e.data);
+                if (msg.type === "beweging") {
+                    if (spelersData["Ander"]) {
+                        spelersData["Ander"].x = msg.x;
+                        spelersData["Ander"].y = msg.y;
+                        spelersData["Ander"].schaal = msg.schaal;
+                    }
+                }
+                if (msg.type === "kill") {
+                    alert("BOOM! Je bent gekilld door de Seeker!");
+                    resetAvatar();
+                }
+            };
             
-            const label = document.createElement('div');
-            label.className = "spelerNaam";
-            label.innerText = naam;
-            av.appendChild(label);
+            peerConnection.ondatachannel = (event) => {
+                dataChannel = event.channel;
+                luisterNaarDatachannel(dataChannel);
+            };
+        }
 
-            const body = document.createElement('div');
-            body.className = "avatarBody";
-            av.appendChild(body);
-
-            av.onclick = (event) => {
-                if (mijnTeam === 'SEEKER' && rol === 'HIDER') {
-                    event.stopPropagation();
+        function openHetSpeelveld() {
+            document.getElementById('lobby').style.display = "none";
+            document.getElementById('gameScherm').style.display = "block";
