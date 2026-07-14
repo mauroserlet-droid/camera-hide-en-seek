@@ -13,7 +13,7 @@
         
         #gameScherm { position: relative; width: 800px; height: 600px; background-color: #222; margin: 20px auto; border: 6px solid #333; border-radius: 10px; overflow: hidden; display: none; }
         
-        /* MULTIPLAYER CAMERARASTER: Verdeelt het scherm live voor alle camera's van de wereld */
+        /* MULTIPLAYER CAMERARASTER */
         #videoContainer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 5px; z-index: 1; background: #000; }
         .webcamBox { position: relative; width: 100%; height: 100%; background: #222; border: 1px solid #444; }
         .webcamStream { width: 100%; height: 100%; object-fit: cover; }
@@ -44,8 +44,9 @@
         <div class="stap">
             <strong>Stap 1:</strong> Kies je rol om een uitnodiging te maken.
             <center>
-                <button id="hiderBtn" class="btn btn-hider">Word Hider</button>
-                <button id="seekerBtn" class="btn btn-seeker">Word Seeker</button>
+                <!-- Onclick hersteld naar directe werking zonder JavaScript crashes -->
+                <button class="btn btn-hider" onclick="startLobby('HIDER')">Word Hider</button>
+                <button class="btn btn-seeker" onclick="startLobby('SEEKER')">Word Seeker</button>
             </center>
         </div>
 
@@ -89,45 +90,38 @@
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
         let lokaleStream = null;
 
-        // Peer-to-peer verbinding motor
         let localPeerConnection;
         let dataChannel;
         const rtcConfig = { iceServers: [{ urls: 'stun:://google.com' }] };
 
-        window.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('hiderBtn').addEventListener('click', () => startLobby('HIDER'));
-            document.getElementById('seekerBtn').addEventListener('click', () => startLobby('SEEKER'));
-        });
-
         async function startLobby(rol) {
             mijnTeam = rol;
             mijnNaam = document.getElementById('spelerNaamInput').value.trim() || "Mauro";
+            
+            // Maak het invoerblok voor de codes direct zichtbaar
             document.getElementById('netwerkBlok').style.display = "block";
 
-            // Start direct de camera op
-            try {
-                lokaleStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                voegVideoVakToe(mijnId, lokaleStream, mijnNaam + " (Jij)");
-            } catch (e) { console.log("Geen camera."); }
-
-            // Zet de peer verbinding klaar
+            // Netwerkmotor direct initialiseren
             localPeerConnection = new RTCPeerConnection(rtcConfig);
             
-            // Voeg camera toe aan de internet stream
-            if (lokaleStream) {
+            // Cameratoegang aanvragen (loopt asynchroon in de achtergrond zodat de knop NOOIT bevriest)
+            navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+            .then(stream => {
+                lokaleStream = stream;
+                voegVideoVakToe(mijnId, lokaleStream, mijnNaam + " (Jij)");
                 lokaleStream.getTracks().forEach(track => localPeerConnection.addTrack(track, lokaleStream));
-            }
+            })
+            .catch(e => {
+                console.log("Geen camera gevonden of geweigerd, spel start zonder video.");
+            });
 
-            // Maak een datakanaal aan voor lopen/kils
             dataChannel = localPeerConnection.createDataChannel("game-data");
             koppelKanaalEvents(dataChannel);
 
-            // Als we de camera van de ander ontvangen
             localPeerConnection.ontrack = (event) => {
                 voegVideoVakToe("Ander", event.streams[0], "Vriend(in)");
             };
 
-            // Maak de unieke verbindingscode aan
             localPeerConnection.onicecandidate = (e) => {
                 if (!e.candidate) {
                     const basisCode = { sdp: localPeerConnection.localDescription, name: mijnNaam, rol: mijnTeam };
@@ -143,26 +137,26 @@
             const rawInput = document.getElementById('anderCode').value.trim();
             if(!rawInput) return alert("Plak eerst de code van je vriend(in)!");
 
-            const gecrashteData = JSON.parse(atob(rawInput));
-            
-            // Als de ander ons een aanbod deed, stuur een antwoord terug
-            if (gecrashteData.sdp.type === "offer") {
-                await localPeerConnection.setRemoteDescription(new RTCSessionDescription(gecrashteData.sdp));
-                const answer = await localPeerConnection.createAnswer();
-                await localPeerConnection.setLocalDescription(answer);
+            try {
+                const gecrashteData = JSON.parse(atob(rawInput));
                 
-                // Update de code in het tekstvak zodat je vriend die kan kopiëren
-                const antwoordCode = { sdp: localPeerConnection.localDescription, name: mijnNaam, rol: mijnTeam };
-                document.getElementById('mijnCode').value = btoa(JSON.stringify(antwoordCode));
-                alert("Kopieer nu de NIEUWE code uit Stap 2 en stuur die terug naar je vriend(in)!");
-            } else if (gecrashteData.sdp.type === "answer") {
-                await localPeerConnection.setRemoteDescription(new RTCSessionDescription(gecrashteData.sdp));
-            }
+                if (gecrashteData.sdp.type === "offer") {
+                    await localPeerConnection.setRemoteDescription(new RTCSessionDescription(gecrashteData.sdp));
+                    const answer = await localPeerConnection.createAnswer();
+                    await localPeerConnection.setLocalDescription(answer);
+                    
+                    const antwoordCode = { sdp: localPeerConnection.localDescription, name: mijnNaam, rol: mijnTeam };
+                    document.getElementById('mijnCode').value = btoa(JSON.stringify(antwoordCode));
+                    alert("Kopieer nu de NIEUWE code uit Stap 2 en stuur die terug naar je vriend(in)!");
+                } else if (gecrashteData.sdp.type === "answer") {
+                    await localPeerConnection.setRemoteDescription(new RTCSessionDescription(gecrashteData.sdp));
+                }
 
-            spelersData["Ander"] = { name: gecrashteData.name, x: 375, y: 250, schaal: 1.0, rol: gecrashteData.rol };
-            maakAvatarElement("Ander", gecrashteData.rol, gecrashteData.name);
-            
-            openHetSpel();
+                spelersData["Ander"] = { name: gecrashteData.name, x: 375, y: 250, schaal: 1.0, rol: gecrashteData.rol };
+                maakAvatarElement("Ander", gecrashteData.rol, gecrashteData.name);
+            } catch (err) {
+                alert("Ongeldige code! Zorg dat je de volledige lap tekst kopieert.");
+            }
         }
 
         function koppelKanaalEvents(channel) {
@@ -188,3 +182,7 @@
             };
         }
 
+        function openHetSpel() {
+            document.getElementById('lobby').style.display = "none";
+            document.getElementById('gameScherm').style.display = "block";
+            document.getElementById('hud').style.display = "block";
