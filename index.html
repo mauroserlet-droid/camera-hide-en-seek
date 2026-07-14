@@ -3,21 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webcam Hunt - Ultimate GitHub Fix</title>
+    <title>Webcam Hunt - Ultimate GitHub Multiplayer</title>
+    <!-- PeerJS bibliotheek inladen voor gratis multiplayer via internet -->
+    <script src="https://unpkg.com"></script>
     <style>
         body { font-family: Arial, sans-serif; background-color: #121212; color: white; margin: 0; padding: 0; text-align: center; overflow: hidden; }
         #lobby { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 20, 20, 0.95); padding: 40px; border-radius: 15px; border: 3px solid #ff4757; z-index: 10; }
         .btn { padding: 12px 24px; font-size: 16px; margin: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
         .btn-hider { background-color: #2ed573; color: white; }
         .btn-seeker { background-color: #ff4757; color: white; }
+        
         #gameScherm { position: relative; width: 800px; height: 600px; background-color: #222; margin: 20px auto; border: 6px solid #333; border-radius: 10px; overflow: hidden; display: none; }
-        #webcamStream { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
-        #avatarContainer { position: absolute; width: 50px; height: 80px; top: 250px; left: 375px; z-index: 5; cursor: pointer; transform-origin: bottom center; }
-        #avatarBody { width: 50px; height: 80px; background-color: #3498db; border-radius: 10px; position: relative; }
-        #avatarBody::before { content: ''; position: absolute; top: -25px; left: 10px; width: 30px; height: 30px; background-color: #ffdbac; border-radius: 50%; }
+        
+        /* Container voor alle camerastreams over elkaar heen */
+        #videoContainer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        .webcamStream { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.5s; }
+        .webcamStream.actief { opacity: 1; } /* Alleen de geselecteerde camera is zichtbaar */
+
+        /* Dynamische avatars */
+        .avatar { position: absolute; width: 50px; height: 80px; z-index: 5; cursor: pointer; transform-origin: bottom center; }
+        .avatarBody { width: 50px; height: 80px; background-color: #3498db; border-radius: 10px; position: relative; }
+        .avatarBody::before { content: ''; position: absolute; top: -25px; left: 10px; width: 30px; height: 30px; background-color: #ffdbac; border-radius: 50%; }
+        .avatar.is-seeker .avatarBody { background-color: #e74c3c; } /* Seekers hebben een rood lichaam */
+
         #zoomControls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 8; display: none; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 10px; }
         .btn-zoom { background-color: #3498db; color: white; border: none; padding: 10px 20px; margin: 0 5px; border-radius: 5px; cursor: pointer;}
         #hud { background: rgba(0,0,0,0.8); padding: 10px; display: none; }
+        #cameraWisselaar { margin-top: 5px; background: #333; color: white; border: 1px solid #555; padding: 5px; border-radius: 5px; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -25,24 +37,26 @@
     <!-- LOBBY MENU -->
     <div id="lobby">
         <h1>Webcam Hunt: GitHub Room</h1>
-        <p>Kies je rol om het spel direct te starten!</p>
-        <button class="btn btn-hider" onclick="startAlsHider()">Word Hider</button>
-        <button class="btn btn-seeker" onclick="startAlsSeeker()">Word Seeker</button>
+        <p>Je unieke ID: <span id="mijnPeerId">Laden...</span></p>
+        <p>Vul het ID in van een vriend die al online is (optioneel):</p>
+        <input type="text" id="connectId" placeholder="ID van vriend..." style="padding: 10px; border-radius: 5px; border: none;"><br><br>
+        <button class="btn btn-hider" onclick="startSpel('HIDER')">Word Hider</button>
+        <button class="btn btn-seeker" onclick="startSpel('SEEKER')">Word Seeker</button>
     </div>
 
     <!-- HUD -->
     <div id="hud">
         <h2>Rol: <span id="teamWeergave">-</span></h2>
         <p id="besturingInfo">Laden...</p>
+        <!-- Knop voor seekers om tussen de camera's van de hiders te zappen -->
+        <button id="cameraWisselaar" onclick="wisselVanCamera()" style="display:none;">Bekijk Volgende Camera</button>
     </div>
 
     <!-- SPEELVELD -->
     <div id="gameScherm">
-        <!-- De echte camera van de computer -->
-        <video id="webcamStream" autoplay playsinline muted></video>
-        <div id="avatarContainer" onclick="killAvatar(event)">
-            <div id="avatarBody"></div>
-        </div>
+        <!-- Hier worden alle camera's van spelers in geplaatst -->
+        <div id="videoContainer"></div>
+        <!-- Hier worden alle spelers (avatars) dynamisch in geplaatst -->
     </div>
 
     <div id="zoomControls">
@@ -52,34 +66,107 @@
 
     <script>
         let mijnTeam = "";
+        let mijnId = "";
+        let peer;
+        let verbindingen = {};
+        let spelers Data = {}; // Slaat posities van alle spelers op
+        let actieveCameraIndex = 0;
+
+        // Lokale speler eigenschappen
         let spelerX = 375; let spelerY = 250; let spelerSchaal = 1.0; 
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+        let lokaleStream = null;
 
-        // Dit is de ingebouwde browser-netwerkmotor. Werkt ALTIJD, zonder internetdownloads!
-        const netwerkKanaal = new BroadcastChannel('webcam_hunt_channel');
-
-        function startAlsHider() {
-            mijnTeam = "HIDER";
-            openHetSpel();
+        // Initialiseer PeerJS zodra de pagina laadt
+        window.onload = function() {
+            peer = new Peer(); // Maakt automatisch verbinding met de gratis PeerJS cloud server
             
-            // Start webcam voor de hider
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-                .then(stream => { document.getElementById('webcamStream').srcObject = stream; })
-                .catch(() => { console.log("Geen camera gevonden."); });
+            peer.on('open', (id) => {
+                mijnId = id;
+                document.getElementById('mijnPeerId').innerText = id;
+            });
+
+            // Luister naar inkomende dataverbindingen (chat/posities)
+            peer.on('connection', (conn) => {
+                registreerVerbindingEvents(conn);
+            });
+
+            // Luister naar inkomende videostreams (camera's)
+            peer.on('call', (call) => {
+                call.answer(lokaleStream); // Stuur je eigen camera terug
+                call.on('stream', (remoteStream) => {
+                    voegVideoToe(call.peer, remoteStream);
+                });
+            });
+        };
+
+        async function startSpel(rol) {
+            mijnTeam = rol;
+            
+            // Start de eigen webcam op
+            try {
+                lokaleStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                voegVideoToe(mijnId, lokaleStream);
+            } catch (e) {
+                console.log("Geen camera gevonden of geweigerd.");
+            }
+
+            // Maak handmatig verbinding met de vriend als er een ID is ingevuld
+            const doelId = document.getElementById('connectId').value.trim();
+            if (doelId) {
+                verbindMetSpeler(doelId);
+            }
+
+            openHetSpel();
+        }
+
+        function verbindMetSpeler(doelId) {
+            if (verbindingen[doelId]) return;
+
+            // 1. Start dataverbinding (voor lopen/kils)
+            let conn = peer.connect(doelId);
+            registreerVerbindingEvents(conn);
+
+            // 2. Start videoverbinding (voor camera)
+            if (lokaleStream) {
+                let call = peer.call(doelId, lokaleStream);
+                call.on('stream', (remoteStream) => {
+                    voegVideoToe(doelId, remoteStream);
+                });
             }
         }
 
-        function startAlsSeeker() {
-            mijnTeam = "SEEKER";
-            openHetSpel();
+        function registreerVerbindingEvents(conn) {
+            verbindingen[conn.peer] = conn;
             
-            // Start webcam voor de seeker monitor
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-                .then(stream => { document.getElementById('webcamStream').srcObject = stream; })
-                .catch(() => { console.log("Geen camera gevonden."); });
-            }
+            conn.on('open', () => {
+                // Stuur direct je huidige rol en positie naar de nieuwe speler
+                conn.send({ type: "join", rol: mijnTeam, x: spelerX, y: spelerY, schaal: spelerSchaal });
+            });
+
+            conn.on('data', (data) => {
+                if (data.type === "join") {
+                    spelersData[conn.peer] = { x: data.x, y: data.y, schaal: data.schaal, rol: data.rol };
+                    maakAvatarElement(conn.peer, data.rol);
+                    // Verbind direct terug zodat het netwerk tweerichtingsverkeer wordt
+                    verbindMetSpeler(conn.peer);
+                }
+                if (data.type === "beweging") {
+                    if (spelersData[conn.peer]) {
+                        spelersData[conn.peer].x = data.x;
+                        spelersData[conn.peer].y = data.y;
+                        spelersData[conn.peer].schaal = data.schaal;
+                    }
+                }
+                if (data.type === "kill" && data.target === mijnId) {
+                    alert("BOOM! Je bent gekilld door een Seeker!");
+                    resetAvatar();
+                }
+            });
+
+            conn.on('close', () => {
+                verwijderSpeler(conn.peer);
+            });
         }
 
         function openHetSpel() {
@@ -88,71 +175,36 @@
             document.getElementById('hud').style.display = "block";
             document.getElementById('teamWeergave').innerText = mijnTeam;
 
+            // Maak de eigen avatar aan
+            maakAvatarElement(mijnId, mijnTeam);
+
             if (mijnTeam === 'HIDER') {
                 document.getElementById('teamWeergave').style.color = "#2ed573";
                 document.getElementById('zoomControls').style.display = "block";
                 document.getElementById('besturingInfo').innerText = "Gebruik de pijltjestoetsen om te lopen.";
             } else {
                 document.getElementById('teamWeergave').style.color = "#ff4757";
-                document.getElementById('besturingInfo').innerText = "Klik op de avatar om te killen!";
+                document.getElementById('besturingInfo').innerText = "Klik op een Hider avatar om ze te killen!";
+                document.getElementById('cameraWisselaar').style.display = "inline-block";
             }
 
-            // Luister continu naar de bewegingen van de andere computer via het browser-kanaal
-            netwerkKanaal.onmessage = (event) => {
-                const data = event.data;
-                if (data.type === "beweging") {
-                    spelerX = data.x;
-                    spelerY = data.y;
-                    spelerSchaal = data.schaal;
-                }
-                if (data.type === "kill") {
-                    alert("BOOM! Je bent gekilld door de Seeker! Spel gereset.");
-                    resetAvatar();
-                }
-            };
+            window.addEventListener('keydown', (e) => { if (e.key in keys) { e.preventDefault(); keys[e.key] = true; } });
+            window.addEventListener('keyup', (e) => { if (e.key in keys) { keys[e.key] = false; } });
 
             setInterval(gameLoop, 1000 / 60);
         }
 
-        window.addEventListener('keydown', (e) => { if (e.key in keys) { e.preventDefault(); keys[e.key] = true; } });
-        window.addEventListener('keyup', (e) => { if (e.key in keys) { keys[e.key] = false; } });
+        function maakAvatarElement(id, rol) {
+            if (document.getElementById(`avatar-${id}`)) return;
 
-        function zoomIn() { if (mijnTeam === 'HIDER') { spelerSchaal += 0.15; if (spelerSchaal > 3) spelerSchaal = 3; stuurPositie(); } }
-        function zoomUit() { if (mijnTeam === 'HIDER') { spelerSchaal -= 0.15; if (spelerSchaal < 0.2) spelerSchaal = 0.2; stuurPositie(); } }
+            const av = document.createElement('div');
+            av.id = `avatar-${id}`;
+            av.className = `avatar ${rol === 'SEEKER' ? 'is-seeker' : 'is-hider'}`;
+            
+            const body = document.createElement('div');
+            body.className = "avatarBody";
+            av.appendChild(body);
 
-        function gameLoop() {
-            if (mijnTeam === 'HIDER') {
-                const snelheid = 5; let isBewogen = false;
-                if (keys.ArrowLeft) { spelerX -= snelheid; isBewogen = true; }
-                if (keys.ArrowRight) { spelerX += snelheid; isBewogen = true; }
-                if (keys.ArrowUp) { spelerY -= snelheid; isBewogen = true; }
-                if (keys.ArrowDown) { spelerY += snelheid; isBewogen = true; }
-
-                if (spelerX < 0) spelerX = 0; if (spelerX > 750) spelerX = 750;
-                if (spelerY < 30) spelerY = 30; if (spelerY > 520) spelerY = 520;
-                if (isBewogen) { stuurPositie(); }
-            }
-            const av = document.getElementById('avatarContainer');
-            if (av) {
-                av.style.left = spelerX + "px";
-                av.style.top = spelerY + "px";
-                av.style.transform = `scale(${spelerSchaal})`;
-            }
-        }
-
-        function stuurPositie() {
-            netwerkKanaal.postMessage({ type: "beweging", x: spelerX, y: spelerY, schaal: spelerSchaal });
-        }
-
-        function killAvatar(event) {
-            if (mijnTeam === 'SEEKER') {
-                event.stopPropagation();
-                alert("Geweldig! Hider gekilld!");
-                netwerkKanaal.postMessage({ type: "kill" });
-                resetAvatar();
-            }
-        }
-        function resetAvatar() { spelerX = 375; spelerY = 250; spelerSchaal = 1.0; }
-    </script>
-</body>
-</html>
+            // Als een seeker op deze specifieke avatar klikt
+            av.onclick = (event) => {
+                if (mijnTeam === 'SEEKER' && rol === 'HIDER') {
