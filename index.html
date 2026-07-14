@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webcam Hunt - Ultimate Fix</title>
+    <title>Webcam Hunt - Ultimate Reset</title>
     <style>
         body { font-family: Arial, sans-serif; background-color: #121212; color: white; margin: 0; padding: 0; text-align: center; overflow: hidden; }
-        #lobby { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 20, 20, 0.95); padding: 40px; border-radius: 15px; border: 3px solid #ff4757; z-index: 10; width: 400px; }
-        .btn { padding: 12px 24px; font-size: 16px; margin: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        #lobby { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 20, 20, 0.95); padding: 40px; border-radius: 15px; border: 3px solid #ff4757; z-index: 10; width: 400px; display: block; }
+        .btn { padding: 12px 24px; font-size: 16px; margin: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; display: inline-block; }
         .btn-hider { background-color: #2ed573; color: white; }
         .btn-seeker { background-color: #ff4757; color: white; }
         
         #gameScherm { position: relative; width: 800px; height: 600px; background-color: #222; margin: 20px auto; border: 6px solid #333; border-radius: 10px; overflow: hidden; display: none; }
         
-        /* MULTIPLAYER CAMERARASTER: Verdeelt de achtergrond voor alle webcams */
+        /* MULTIPLAYER CAMERARASTER */
         #videoContainer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 5px; z-index: 1; background: #000; }
         .webcamBox { position: relative; width: 100%; height: 100%; background: #222; border: 1px solid #444; }
         .webcamStream { width: 100%; height: 100%; object-fit: cover; }
@@ -39,8 +39,9 @@
         <p>Spelersnaam:</p>
         <input type="text" id="spelerNaamInput" value="Mauro" style="padding: 10px; border-radius: 5px; border: none; font-size: 16px; text-align: center; width: 80%;"><br><br>
         
-        <button class="btn btn-hider" onclick="selecteerRol('HIDER')">Word Hider</button>
-        <button class="btn btn-seeker" onclick="selecteerRol('SEEKER')">Word Seeker</button>
+        <!-- Knoppen omgebouwd naar pure ID-triggers, we gebruiken GEEN inline 'onclick' meer -->
+        <button id="knopHider" class="btn btn-hider">Word Hider</button>
+        <button id="knopSeeker" class="btn btn-seeker">Word Seeker</button>
     </div>
 
     <!-- HUD -->
@@ -69,10 +70,14 @@
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
         let lokaleStream = null;
 
-        // De ingebouwde browser-netwerkmotor uit jouw allereerste werkende code
+        // Ingebouwde browser netwerkmotor uit jouw allereerste werkende code
         const netwerkKanaal = new BroadcastChannel('webcam_hunt_channel');
 
+        // Luister VEILIG naar knopklikken via EventListeners (Dit weigert de browser NOOIT)
         window.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('knopHider').addEventListener('click', () => startHetSpel('HIDER'));
+            document.getElementById('knopSeeker').addEventListener('click', () => startHetSpel('SEEKER'));
+
             netwerkKanaal.onmessage = (event) => {
                 const data = event.data;
                 if (data.id === mijnId) return;
@@ -118,16 +123,17 @@
             });
         });
 
-        function selecteerRol(rol) {
+        function startHetSpel(rol) {
             mijnTeam = rol;
             mijnNaam = document.getElementById('spelerNaamInput').value.trim() || "Mauro";
             
-            // Schakel direct over naar het speelscherm
+            // STAP 1: Wissel DIRECT van scherm (Dwingend, dit kan niet crashen)
             document.getElementById('lobby').style.display = "none";
             document.getElementById('gameScherm').style.display = "block";
             document.getElementById('hud').style.display = "block";
             document.getElementById('teamWeergave').innerText = mijnTeam;
 
+            // STAP 2: Bouw je eigen personage op het scherm
             maakAvatarElement(mijnId, mijnTeam, mijnNaam + " (Jij)");
 
             if (mijnTeam === 'HIDER') {
@@ -139,16 +145,17 @@
                 document.getElementById('besturingInfo').innerText = "Klik op een Hider avatar om ze te killen!";
             }
 
-            // Start de camera pas ná de schermwissel zodat de knop nooit blokkeert
+            // STAP 3: Vraag NU pas toestemming voor de camera in de achtergrond [1]
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 navigator.mediaDevices.getUserMedia({ video: true, audio: false })
                 .then(stream => {
                     lokaleStream = stream;
                     voegVideoToe(mijnId, lokaleStream, mijnNaam);
                 })
-                .catch(() => { console.log("Geen camera gevonden."); });
+                .catch(() => { console.log("Camera niet toegestaan of niet gevonden."); });
             }
 
+            // STAP 4: Zend je aanmelding uit naar de multiplayer
             netwerkKanaal.postMessage({
                 type: "join", id: mijnId, name: mijnNaam, rol: mijnTeam, x: spelerX, y: spelerY, schaal: spelerSchaal
             });
@@ -188,19 +195,4 @@
 
         function voegVideoToe(id, stream, labelTekst) {
             if (document.getElementById(`video-${id}`)) return;
-
-            const box = document.createElement('div');
-            box.className = "webcamBox";
-            box.id = `video-${id}`;
-
-            const video = document.createElement('video');
-            video.className = "webcamStream";
-            video.srcObject = stream;
-            video.autoplay = true;
-            video.playsinline = true;
-            video.muted = true;
-
-            const label = document.createElement('div');
-            label.className = "cameraLabel";
-            label.innerText = labelTekst;
 
