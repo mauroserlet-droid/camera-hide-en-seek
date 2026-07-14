@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Webcam Hunt - Ultimate GitHub Multiplayer</title>
-    <!-- PeerJS bibliotheek inladen voor gratis multiplayer via internet -->
-    <script src="https://unpkg.com"></script>
+    
+    <!-- Superstabiele CDN link voor PeerJS (Vraagt ook minder strenge rechten op GitHub) -->
+    <script src="https://cloudflare.com" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    
     <style>
         body { font-family: Arial, sans-serif; background-color: #121212; color: white; margin: 0; padding: 0; text-align: center; overflow: hidden; }
         #lobby { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 20, 20, 0.95); padding: 40px; border-radius: 15px; border: 3px solid #ff4757; z-index: 10; }
@@ -15,16 +17,14 @@
         
         #gameScherm { position: relative; width: 800px; height: 600px; background-color: #222; margin: 20px auto; border: 6px solid #333; border-radius: 10px; overflow: hidden; display: none; }
         
-        /* Container voor alle camerastreams over elkaar heen */
         #videoContainer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
         .webcamStream { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.5s; }
-        .webcamStream.actief { opacity: 1; } /* Alleen de geselecteerde camera is zichtbaar */
+        .webcamStream.actief { opacity: 1; }
 
-        /* Dynamische avatars */
         .avatar { position: absolute; width: 50px; height: 80px; z-index: 5; cursor: pointer; transform-origin: bottom center; }
         .avatarBody { width: 50px; height: 80px; background-color: #3498db; border-radius: 10px; position: relative; }
         .avatarBody::before { content: ''; position: absolute; top: -25px; left: 10px; width: 30px; height: 30px; background-color: #ffdbac; border-radius: 50%; }
-        .avatar.is-seeker .avatarBody { background-color: #e74c3c; } /* Seekers hebben een rood lichaam */
+        .avatar.is-seeker .avatarBody { background-color: #e74c3c; }
 
         #zoomControls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 8; display: none; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 10px; }
         .btn-zoom { background-color: #3498db; color: white; border: none; padding: 10px 20px; margin: 0 5px; border-radius: 5px; cursor: pointer;}
@@ -37,26 +37,25 @@
     <!-- LOBBY MENU -->
     <div id="lobby">
         <h1>Webcam Hunt: GitHub Room</h1>
-        <p>Je unieke ID: <span id="mijnPeerId">Laden...</span></p>
+        <p>Je unieke ID: <span id="mijnPeerId">Verbinden met netwerk...</span></p>
         <p>Vul het ID in van een vriend die al online is (optioneel):</p>
         <input type="text" id="connectId" placeholder="ID van vriend..." style="padding: 10px; border-radius: 5px; border: none;"><br><br>
-        <button class="btn btn-hider" onclick="startSpel('HIDER')">Word Hider</button>
-        <button class="btn btn-seeker" onclick="startSpel('SEEKER')">Word Seeker</button>
+        
+        <!-- ID's toegevoegd aan de knoppen om ze veilig aan te sturen via JS -->
+        <button id="hiderBtn" class="btn btn-hider">Word Hider</button>
+        <button id="seekerBtn" class="btn btn-seeker">Word Seeker</button>
     </div>
 
     <!-- HUD -->
     <div id="hud">
         <h2>Rol: <span id="teamWeergave">-</span></h2>
         <p id="besturingInfo">Laden...</p>
-        <!-- Knop voor seekers om tussen de camera's van de hiders te zappen -->
         <button id="cameraWisselaar" onclick="wisselVanCamera()" style="display:none;">Bekijk Volgende Camera</button>
     </div>
 
     <!-- SPEELVELD -->
     <div id="gameScherm">
-        <!-- Hier worden alle camera's van spelers in geplaatst -->
         <div id="videoContainer"></div>
-        <!-- Hier worden alle spelers (avatars) dynamisch in geplaatst -->
     </div>
 
     <div id="zoomControls">
@@ -65,45 +64,54 @@
     </div>
 
     <script>
+        // We verpakken alle code in een veilige check die pas start als PeerJS geladen is
         let mijnTeam = "";
         let mijnId = "";
         let peer;
         let verbindingen = {};
-        let spelersData = {}; // Gecorrigeerd: spatie weggehaald!
+        let spelersData = {};
         let actieveCameraIndex = 0;
 
-        // Lokale speler eigenschappen
         let spelerX = 375; let spelerY = 250; let spelerSchaal = 1.0; 
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
         let lokaleStream = null;
 
-        // Initialiseer PeerJS zodra de pagina laadt
-        window.onload = function() {
-            peer = new Peer(); // Maakt automatisch verbinding met de gratis PeerJS cloud server
+        // Start de netwerk logica zodra de pagina en alle scripts klaarstaan
+        window.addEventListener('DOMContentLoaded', () => {
+            
+            // Controleer of PeerJS netjes is ingeladen door de browser
+            if (typeof Peer === 'undefined') {
+                document.getElementById('mijnPeerId').innerText = "Fout: Netwerk-module kon niet laden. Ververs de pagina.";
+                document.getElementById('mijnPeerId').style.color = "#ff4757";
+                return;
+            }
+
+            peer = new Peer(); 
             
             peer.on('open', (id) => {
                 mijnId = id;
                 document.getElementById('mijnPeerId').innerText = id;
             });
 
-            // Luister naar inkomende dataverbindingen
             peer.on('connection', (conn) => {
                 registreerVerbindingEvents(conn);
             });
 
-            // Luister naar inkomende videostreams
             peer.on('call', (call) => {
-                call.answer(lokaleStream); // Stuur je eigen camera terug
+                call.answer(lokaleStream); 
                 call.on('stream', (remoteStream) => {
                     voegVideoToe(call.peer, remoteStream);
                 });
             });
-        };
+
+            // Koppel de knoppen nu VEILIG via JavaScript in plaats van inline HTML onclick
+            document.getElementById('hiderBtn').addEventListener('click', () => startSpel('HIDER'));
+            document.getElementById('seekerBtn').addEventListener('click', () => startSpel('SEEKER'));
+        });
 
         async function startSpel(rol) {
             mijnTeam = rol;
             
-            // Start de eigen webcam op
             try {
                 lokaleStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                 voegVideoToe(mijnId, lokaleStream);
@@ -111,7 +119,6 @@
                 console.log("Geen camera gevonden of geweigerd.");
             }
 
-            // Maak handmatig verbinding met de vriend als er een ID is ingevuld
             const doelId = document.getElementById('connectId').value.trim();
             if (doelId) {
                 verbindMetSpeler(doelId);
@@ -123,11 +130,9 @@
         function verbindMetSpeler(doelId) {
             if (verbindingen[doelId]) return;
 
-            // 1. Start dataverbinding
             let conn = peer.connect(doelId);
             registreerVerbindingEvents(conn);
 
-            // 2. Start videoverbinding
             if (lokaleStream) {
                 let call = peer.call(doelId, lokaleStream);
                 call.on('stream', (remoteStream) => {
@@ -210,7 +215,3 @@
                 }
             };
 
-            document.getElementById('gameScherm').appendChild(av);
-        }
-
-        function voegVideoToe(id, stream) {
