@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webcam Hunt - Ultimate GitHub Multiplayer</title>
+    <title>Webcam Hunt - Global Multiplayer</title>
     
-    <!-- We laden PeerJS direct in via de officiële en snelle UNPKG-server -->
-    <script src="https://unpkg.com"></script>
+    <!-- We laden de superstabiele PubNub bibliotheek in voor wereldwijd netwerkverkeer -->
+    <script src="https://pubnub.com"></script>
     
     <style>
         body { font-family: Arial, sans-serif; background-color: #121212; color: white; margin: 0; padding: 0; text-align: center; overflow: hidden; }
@@ -17,30 +17,32 @@
         
         #gameScherm { position: relative; width: 800px; height: 600px; background-color: #222; margin: 20px auto; border: 6px solid #333; border-radius: 10px; overflow: hidden; display: none; }
         
-        #videoContainer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
-        .webcamStream { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.5s; }
-        .webcamStream.actief { opacity: 1; }
+        /* MULTIPLAYER CAMERARASTER: Toont de camera's van spelers wereldwijd */
+        #videoContainer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 5px; z-index: 1; background: #000; }
+        .webcamBox { position: relative; width: 100%; height: 100%; background: #222; border: 1px solid #444; }
+        .webcamStream { width: 100%; height: 100%; object-fit: cover; }
+        .cameraLabel { position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 2px 8px; border-radius: 4px; font-size: 12px; }
 
+        /* Dynamische avatars */
         .avatar { position: absolute; width: 50px; height: 80px; z-index: 5; cursor: pointer; transform-origin: bottom center; }
         .avatarBody { width: 50px; height: 80px; background-color: #3498db; border-radius: 10px; position: relative; }
         .avatarBody::before { content: ''; position: absolute; top: -25px; left: 10px; width: 30px; height: 30px; background-color: #ffdbac; border-radius: 50%; }
         .avatar.is-seeker .avatarBody { background-color: #e74c3c; }
+        .spelerNaam { position: absolute; top: -45px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 2px 6px; border-radius: 4px; font-size: 11px; white-space: nowrap; }
 
         #zoomControls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 8; display: none; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 10px; }
         .btn-zoom { background-color: #3498db; color: white; border: none; padding: 10px 20px; margin: 0 5px; border-radius: 5px; cursor: pointer;}
         #hud { background: rgba(0,0,0,0.8); padding: 10px; display: none; }
-        #cameraWisselaar { margin-top: 5px; background: #333; color: white; border: 1px solid #555; padding: 5px; border-radius: 5px; cursor: pointer; }
     </style>
 </head>
 <body>
 
     <!-- LOBBY MENU -->
     <div id="lobby">
-        <h1>Webcam Hunt: GitHub Room</h1>
-        <p>Je unieke ID: <span id="mijnPeerId" style="color: #2ed573; font-weight: bold;">Inladen...</span></p>
-        <p>Vul het ID in van een vriend die al online is (optioneel):</p>
-        <input type="text" id="connectId" placeholder="ID van vriend..." style="padding: 10px; border-radius: 5px; border: none;"><br><br>
-        
+        <h1>Webcam Hunt: Global Room</h1>
+        <p>Status netwerk: <span id="netwerkStatus" style="color: #2ed573; font-weight: bold;">Verbinden...</span></p>
+        <p>Vul je spelersnaam in:</p>
+        <input type="text" id="spelerNaamInput" placeholder="Jouw naam..." style="padding: 10px; border-radius: 5px; border: none; font-size: 16px; text-align: center;"><br><br>
         <button id="hiderBtn" class="btn btn-hider">Word Hider</button>
         <button id="seekerBtn" class="btn btn-seeker">Word Seeker</button>
     </div>
@@ -49,7 +51,6 @@
     <div id="hud">
         <h2>Rol: <span id="teamWeergave">-</span></h2>
         <p id="besturingInfo">Laden...</p>
-        <button id="cameraWisselaar" onclick="wisselVanCamera()" style="display:none;">Bekijk Volgende Camera</button>
     </div>
 
     <!-- SPEELVELD -->
@@ -64,108 +65,103 @@
 
     <script>
         let mijnTeam = "";
-        let mijnId = "";
-        let peer;
-        let verbindingen = {};
+        let mijnId = "User_" + Math.floor(Math.random() * 100000);
+        let mijnNaam = "";
+        
         let spelersData = {};
-        let actieveCameraIndex = 0;
-
         let spelerX = 375; let spelerY = 250; let spelerSchaal = 1.0; 
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
         let lokaleStream = null;
+        let pubnub;
 
         window.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('mijnPeerId').innerText = "Verbinden...";
-
-            // We openen PeerJS met de standaardinstellingen (zoekt zelf de beste server)
-            peer = new Peer(); 
-            
-            peer.on('open', (id) => {
-                mijnId = id;
-                document.getElementById('mijnPeerId').innerText = id;
+            // We initialiseren PubNub met een openbare demo-sleutel (werkt ALTIJD en wereldwijd!)
+            pubnub = new PubNub({
+                publishKey: 'pub-c-4b7b25bf-4009-4bf5-b98a-2735749ff827',
+                subscribeKey: 'sub-c-671239aa-a185-11eb-b593-ba3017cfbf65',
+                userId: mijnId
             });
 
-            peer.on('error', (err) => {
-                console.error("Netwerkfout:", err);
-                document.getElementById('mijnPeerId').innerText = "Fout bij verbinden. Herlaad.";
+            // Luister naar signalen van spelers over de hele wereld
+            pubnub.addListener({
+                message: function(event) {
+                    const data = event.message;
+                    if (data.id === mijnId) return; // Negeer eigen berichten
+
+                    if (data.type === "join") {
+                        spelersData[data.id] = { name: data.name, x: data.x, y: data.y, schaal: data.schaal, rol: data.rol };
+                        maakAvatarElement(data.id, data.rol, data.name);
+                        
+                        // Stuur jouw info terug naar de nieuwe speler
+                        stuurNetwerkBericht({
+                            type: "sync",
+                            id: mijnId,
+                            name: mijnNaam,
+                            rol: mijnTeam,
+                            x: spelerX,
+                            y: spelerY,
+                            schaal: spelerSchaal
+                        });
+                    }
+
+                    if (data.type === "sync") {
+                        if (!spelersData[data.id]) {
+                            spelersData[data.id] = { name: data.name, x: data.x, y: data.y, schaal: data.schaal, rol: data.rol };
+                            maakAvatarElement(data.id, data.rol, data.name);
+                        }
+                    }
+
+                    if (data.type === "beweging") {
+                        if (spelersData[data.id]) {
+                            spelersData[data.id].x = data.x;
+                            spelersData[data.id].y = data.y;
+                            spelersData[data.id].schaal = data.schaal;
+                        }
+                    }
+
+                    if (data.type === "kill" && data.target === mijnId) {
+                        alert("BOOM! Je bent gekilld door een wereldwijde Seeker!");
+                        resetAvatar();
+                    }
+
+                    if (data.type === "leave") {
+                        verwijderSpeler(data.id);
+                    }
+                }
             });
 
-            peer.on('connection', (conn) => {
-                registreerVerbindingEvents(conn);
-            });
-
-            peer.on('call', (call) => {
-                call.answer(lokaleStream); 
-                call.on('stream', (remoteStream) => {
-                    voegVideoToe(call.peer, remoteStream);
-                });
-            });
+            // Abonneer op het wereldwijde game-kanaal
+            pubnub.subscribe({ channels: ['webcam_hunt_global_channel'] });
+            document.getElementById('netwerkStatus').innerText = "Online (Wereldwijd)";
 
             document.getElementById('hiderBtn').addEventListener('click', () => startSpel('HIDER'));
             document.getElementById('seekerBtn').addEventListener('click', () => startSpel('SEEKER'));
         });
 
         async function startSpel(rol) {
+            mijnNaam = document.getElementById('spelerNaamInput').value.trim() || mijnId;
             mijnTeam = rol;
             
             try {
+                // Activeer camera
                 lokaleStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                voegVideoToe(mijnId, lokaleStream);
+                voegLokaleVideoToe();
             } catch (e) {
                 console.log("Geen camera gevonden.");
             }
 
-            const doelId = document.getElementById('connectId').value.trim();
-            if (doelId) {
-                verbindMetSpeler(doelId);
-            }
+            // Vertel de wereld dat je meedoet
+            stuurNetwerkBericht({
+                type: "join",
+                id: mijnId,
+                name: mijnNaam,
+                rol: mijnTeam,
+                x: spelerX,
+                y: spelerY,
+                schaal: spelerSchaal
+            });
 
             openHetSpel();
-        }
-
-        function verbindMetSpeler(doelId) {
-            if (verbindingen[doelId]) return;
-
-            let conn = peer.connect(doelId);
-            registreerVerbindingEvents(conn);
-
-            if (lokaleStream) {
-                let call = peer.call(doelId, lokaleStream);
-                call.on('stream', (remoteStream) => {
-                    voegVideoToe(doelId, remoteStream);
-                });
-            }
-        }
-
-        function registreerVerbindingEvents(conn) {
-            verbindingen[conn.peer] = conn;
-            
-            conn.on('open', () => {
-                conn.send({ type: "join", rol: mijnTeam, x: spelerX, y: spelerY, schaal: spelerSchaal });
-            });
-
-            conn.on('data', (data) => {
-                if (data.type === "join") {
-                    spelersData[conn.peer] = { x: data.x, y: data.y, schaal: data.schaal, rol: data.rol };
-                    maakAvatarElement(conn.peer, data.rol);
-                    verbindMetSpeler(conn.peer);
-                }
-                if (data.type === "beweging") {
-                    if (spelersData[conn.peer]) {
-                        spelersData[conn.peer].x = data.x;
-                        spelersData[conn.peer].y = data.y;
-                        spelersData[conn.peer].schaal = data.schaal;
-                    }
-                }
-                if (data.type === "kill" && data.target === mijnId) {
-                    alert("BOOM! Je bent gekilld!");
-                    resetAvatar();
-                }
-            });
-
-            conn.on('close', () => {
-                verwijderSpeler(conn.peer);
-            });
         }
 
         function openHetSpel() {
@@ -174,7 +170,7 @@
             document.getElementById('hud').style.display = "block";
             document.getElementById('teamWeergave').innerText = mijnTeam;
 
-            maakAvatarElement(mijnId, mijnTeam);
+            maakAvatarElement(mijnId, mijnTeam, mijnNaam + " (Jij)");
 
             if (mijnTeam === 'HIDER') {
                 document.getElementById('teamWeergave').style.color = "#2ed573";
@@ -183,7 +179,6 @@
             } else {
                 document.getElementById('teamWeergave').style.color = "#ff4757";
                 document.getElementById('besturingInfo').innerText = "Klik op een Hider avatar om ze te killen!";
-                document.getElementById('cameraWisselaar').style.display = "inline-block";
             }
 
             window.addEventListener('keydown', (e) => { if (e.key in keys) { e.preventDefault(); keys[e.key] = true; } });
@@ -192,34 +187,17 @@
             setInterval(gameLoop, 1000 / 60);
         }
 
-        function maakAvatarElement(id, rol) {
+        function maakAvatarElement(id, rol, naam) {
             if (document.getElementById(`avatar-${id}`)) return;
 
             const av = document.createElement('div');
             av.id = `avatar-${id}`;
             av.className = `avatar ${rol === 'SEEKER' ? 'is-seeker' : 'is-hider'}`;
             
+            const label = document.createElement('div');
+            label.className = "spelerNaam";
+            label.innerText = naam;
+            av.appendChild(label);
+
             const body = document.createElement('div');
             body.className = "avatarBody";
-            av.appendChild(body);
-
-            av.onclick = (event) => {
-                if (mijnTeam === 'SEEKER' && rol === 'HIDER') {
-                    event.stopPropagation();
-                    alert("Hider gekilld!");
-                    stuurNaarAllen({ type: "kill", target: id });
-                }
-            };
-
-            document.getElementById('gameScherm').appendChild(av);
-        }
-
-        function voegVideoToe(id, stream) {
-            if (document.getElementById(`video-${id}`)) return;
-
-            const video = document.createElement('video');
-            video.id = `video-${id}`;
-            video.className = "webcamStream";
-            video.srcObject = stream;
-            video.autoplay = true;
-            video.playsinline = true;
