@@ -5,9 +5,138 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Webcam Hunt - GitHub Fixed</title>
     
-    <!-- Stabiele netwerflink die perfect werkt binnen GitHub Pages -->
+    <!-- PeerJS bibliotheek voor multiplayer verbinding -->
     <script src="https://cloudflare.com"></script>
     
+    <script>
+        // We definiëren direct alle variabelen bovenin de HEAD zodat ze direct klaarstaan
+        let lobby, gameScherm, hud, teamWeergave, besturingInfo, avatarContainer, videoElement;
+        let peer, dataConnectie, mijnTeam = "", mijnWebcamStream = null;
+        let spelerX = 375; let spelerY = 250; let spelerSchaal = 1.0; 
+        const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+
+        // Zodra de pagina geladen is, koppelen we direct de HTML elementen aan de variabelen
+        window.addEventListener('DOMContentLoaded', () => {
+            lobby = document.getElementById('lobby');
+            gameScherm = document.getElementById('gameScherm');
+            hud = document.getElementById('hud');
+            teamWeergave = document.getElementById('teamWeergave');
+            besturingInfo = document.getElementById('besturingInfo');
+            avatarContainer = document.getElementById('avatarContainer');
+            videoElement = document.getElementById('remoteVideo');
+        });
+
+        // De functies binden we direct keihard vast aan het window-object
+        window.startAlsHider = function() {
+            mijnTeam = "HIDER";
+            document.getElementById('hiderCodeSectie').style.display = "block";
+
+            const startPeer = () => {
+                if (typeof Peer === 'undefined') {
+                    document.getElementById('mijnKamerCode').innerText = "Herstarten...";
+                    return alert("Netwerk laadt nog, ververs de pagina over 5 seconden!");
+                }
+                peer = new Peer();
+                peer.on('open', (id) => { document.getElementById('mijnKamerCode').innerText = id; });
+                peer.on('connection', (conn) => { dataConnectie = conn; openHetSpel(); setupDataLuisteraar(); });
+                peer.on('call', (call) => { call.answer(mijnWebcamStream); });
+            };
+
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                .then(stream => { mijnWebcamStream = stream; videoElement.srcObject = stream; startPeer(); })
+                .catch(() => { alert("Geen camera gevonden, spel start in testmodus."); startPeer(); });
+            } else { startPeer(); }
+        }
+
+        window.startAlsSeeker = function() {
+            mijnTeam = "SEEKER";
+            const code = document.getElementById('kamercodeInput').value.trim();
+            if (!code) return alert("Typ een code!");
+
+            peer = new Peer();
+            peer.on('open', () => {
+                dataConnectie = peer.connect(code);
+                dataConnectie.on('open', () => { openHetSpel(); setupDataLuisteraar(); });
+
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(stream => {
+                        const call = peer.call(code, stream);
+                        call.on('stream', (remoteStream) => { videoElement.srcObject = remoteStream; });
+                    }).catch(() => {
+                        const call = peer.call(code, null);
+                        call.on('stream', (remoteStream) => { videoElement.srcObject = remoteStream; });
+                    });
+                }
+            });
+        }
+
+        function openHetSpel() {
+            lobby.style.display = "none";
+            gameScherm.style.display = "block";
+            hud.style.display = "block";
+            teamWeergave.innerText = mijnTeam;
+
+            if (mijnTeam === 'HIDER') {
+                teamWeergave.style.color = "#2ed573";
+                document.getElementById('zoomControls').style.display = "block";
+                besturingInfo.innerText = "Gebruik de pijltjestoetsen om te lopen.";
+            } else {
+                teamWeergave.style.color = "#ff4757";
+                besturingInfo.innerText = "Klik op de avatar om te killen!";
+            }
+            setInterval(gameLoop, 1000 / 60);
+        }
+
+        function setupDataLuisteraar() {
+            dataConnectie.on('data', (data) => {
+                if (data.type === "beweging") { spelerX = data.x; spelerY = data.y; spelerSchaal = data.schaal; }
+                if (data.type === "kill") { alert("BOOM! Gekilld!"); resetAvatar(); }
+            });
+        }
+
+        window.addEventListener('keydown', (e) => { if (e.key in keys) { e.preventDefault(); keys[e.key] = true; } });
+        window.addEventListener('keyup', (e) => { if (e.key in keys) { keys[e.key] = false; } });
+
+        window.zoomIn = function() { if (mijnTeam === 'HIDER') { spelerSchaal += 0.15; if (spelerSchaal > 3) spelerSchaal = 3; stuurPositie(); } }
+        window.zoomUit = function() { if (mijnTeam === 'HIDER') { spelerSchaal -= 0.15; if (spelerSchaal < 0.2) spelerSchaal = 0.2; stuurPositie(); } }
+
+        function gameLoop() {
+            if (mijnTeam === 'HIDER') {
+                const snelheid = 5; let isBewogen = false;
+                if (keys.ArrowLeft) { spelerX -= snelheid; isBewogen = true; }
+                if (keys.ArrowRight) { spelerX += snelheid; isBewogen = true; }
+                if (keys.ArrowUp) { spelerY -= snelheid; isBewogen = true; }
+                if (keys.ArrowDown) { spelerY += snelheid; isBewogen = true; }
+
+                if (spelerX < 0) spelerX = 0; if (spelerX > 750) spelerX = 750;
+                if (spelerY < 30) spelerY = 30; if (spelerY > 520) spelerY = 520;
+                if (isBewogen) { stuurPositie(); }
+            }
+            if (avatarContainer) {
+                avatarContainer.style.left = spelerX + "px";
+                avatarContainer.style.top = spelerY + "px";
+                avatarContainer.style.transform = `scale(${spelerSchaal})`;
+            }
+        }
+
+        function stuurPositie() {
+            if (dataConnectie && dataConnectie.open) {
+                dataConnectie.send({ type: "beweging", x: spelerX, y: spelerY, schaal: spelerSchaal });
+            }
+        }
+
+        window.killAvatar = function(event) {
+            if (mijnTeam === 'SEEKER') {
+                event.stopPropagation();
+                alert("Hider gekilld!");
+                dataConnectie.send({ type: "kill" });
+                resetAvatar();
+            }
+        }
+        function resetAvatar() { spelerX = 375; spelerY = 250; spelerSchaal = 1.0; }
+    </script>
+
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -119,138 +248,4 @@
     </style>
 </head>
 <body>
-
-    <!-- LOBBY MENU -->
-    <div id="lobby">
-        <h1>Webcam Hunt: GitHub Edition</h1>
-        <p>Wil jij je verstoppen of gaan zoeken?</p>
-        
-        <div style="border-bottom: 1px solid #444; padding-bottom: 20px; margin-bottom: 20px;">
-            <button class="btn btn-hider" onclick="window.startAlsHider()">1. Word Hider</button>
-            <div id="hiderCodeSectie" style="display:none;">
-                <p>Geef deze code aan de Seeker:</p>
-                <div id="mijnKamerCode" class="code-box">Laden...</div>
-            </div>
-        </div>
-
-        <div>
-            <p>Ben jij de Seeker? Typ de code van de Hider in:</p>
-            <input type="text" id="kamercodeInput" placeholder="Code hier..."><br>
-            <button class="btn btn-seeker" onclick="window.startAlsSeeker()">2. Connect & Hunt</button>
-        </div>
-    </div>
-
-    <!-- HUD -->
-    <div id="hud">
-        <h2>Rol: <span id="teamWeergave">-</span></h2>
-        <p id="besturingInfo">Laden...</p>
-    </div>
-
-    <!-- HET SPEELVELD -->
-    <div id="gameScherm">
-        <video id="remoteVideo" autoplay playsinline muted></video>
-        <div id="avatarContainer" onclick="window.killAvatar(event)">
-            <div id="avatarBody"></div>
-        </div>
-    </div>
-
-    <div id="zoomControls">
-        <button class="btn-zoom" onclick="window.zoomIn()">Dichterbij (+)</button>
-        <button class="btn-zoom" onclick="window.zoomUit()">Verder Weg (-)</button>
-    </div>
-
-    <script>
-        const lobby = document.getElementById('lobby');
-        const gameScherm = document.getElementById('gameScherm');
-        const hud = document.getElementById('hud');
-        const teamWeergave = document.getElementById('teamWeergave');
-        const besturingInfo = document.getElementById('besturingInfo');
-        const avatarContainer = document.getElementById('avatarContainer');
-        const videoElement = document.getElementById('remoteVideo');
-
-        let peer, dataConnectie, mijnTeam = "", mijnWebcamStream = null;
-        let spelerX = 375; let spelerY = 250; let spelerSchaal = 1.0; 
-        const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
-
-        window.startAlsHider = function() {
-            mijnTeam = "HIDER";
-            document.getElementById('hiderCodeSectie').style.display = "block";
-
-            const startPeer = () => {
-                if (typeof Peer === 'undefined') {
-                    document.getElementById('mijnKamerCode').innerText = "Herstarten...";
-                    return alert("Netwerk laadt nog, ververs de pagina over 5 seconden!");
-                }
-                peer = new Peer();
-                peer.on('open', (id) => { document.getElementById('mijnKamerCode').innerText = id; });
-                peer.on('connection', (conn) => { dataConnectie = conn; openHetSpel(); setupDataLuisteraar(); });
-                peer.on('call', (call) => { call.answer(mijnWebcamStream); });
-            };
-
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-                .then(stream => { mijnWebcamStream = stream; videoElement.srcObject = stream; startPeer(); })
-                .catch(() => { alert("Geen camera gevonden, spel start in testmodus."); startPeer(); });
-            } else { startPeer(); }
-        }
-
-        window.startAlsSeeker = function() {
-            mijnTeam = "SEEKER";
-            const code = document.getElementById('kamercodeInput').value.trim();
-            if (!code) return alert("Typ een code!");
-
-            peer = new Peer();
-            peer.on('open', () => {
-                dataConnectie = peer.connect(code);
-                dataConnectie.on('open', () => { openHetSpel(); setupDataLuisteraar(); });
-
-                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                    navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(stream => {
-                        const call = peer.call(code, stream);
-                        call.on('stream', (remoteStream) => { videoElement.srcObject = remoteStream; });
-                    }).catch(() => {
-                        const call = peer.call(code, null);
-                        call.on('stream', (remoteStream) => { videoElement.srcObject = remoteStream; });
-                    });
-                }
-            });
-        }
-
-        function openHetSpel() {
-            lobby.style.display = "none";
-            gameScherm.style.display = "block";
-            hud.style.display = "block";
-            teamWeergave.innerText = mijnTeam;
-
-            if (mijnTeam === 'HIDER') {
-                teamWeergave.style.color = "#2ed573";
-                document.getElementById('zoomControls').style.display = "block";
-                besturingInfo.innerText = "Gebruik de pijltjestoetsen om te lopen.";
-            } else {
-                teamWeergave.style.color = "#ff4757";
-                besturingInfo.innerText = "Klik op de avatar om te killen!";
-            }
-            setInterval(gameLoop, 1000 / 60);
-        }
-
-        function setupDataLuisteraar() {
-            dataConnectie.on('data', (data) => {
-                if (data.type === "beweging") { spelerX = data.x; spelerY = data.y; spelerSchaal = data.schaal; }
-                if (data.type === "kill") { alert("BOOM! Gekilld!"); resetAvatar(); }
-            });
-        }
-
-        window.addEventListener('keydown', (e) => { if (e.key in keys) { e.preventDefault(); keys[e.key] = true; } });
-        window.addEventListener('keyup', (e) => { if (e.key in keys) { keys[e.key] = false; } });
-
-        window.zoomIn = function() { if (mijnTeam === 'HIDER') { spelerSchaal += 0.15; if (spelerSchaal > 3) spelerSchaal = 3; stuurPositie(); } }
-        window.zoomUit = function() { if (mijnTeam === 'HIDER') { spelerSchaal -= 0.15; if (spelerSchaal < 0.2) spelerSchaal = 0.2; stuurPositie(); } }
-
-        function gameLoop() {
-            if (mijnTeam === 'HIDER') {
-                const snelheid = 5; let isBewogen = false;
-                if (keys.ArrowLeft) { spelerX -= snelheid; isBewogen = true; }
-                if (keys.ArrowRight) { spelerX += snelheid; isBewogen = true; }
-                if (keys.ArrowUp) { spelerY -= snelheid; isBewogen = true; }
-                if (keys.ArrowDown) { spelerY += snelheid; isBewogen = true; }
 
